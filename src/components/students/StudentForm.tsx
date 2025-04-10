@@ -10,6 +10,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { supabase } from '@/integrations/supabase/client';
 
 // Define the form schema with Zod
 const studentSchema = z.object({
@@ -37,11 +38,10 @@ const StudentForm = ({
   floorId, 
   roomId 
 }: StudentFormProps) => {
-  const [photoPreview, setPhotoPreview] = useState<string | null>(
-    isEditing ? 'https://i.pravatar.cc/150?img=1' : null
-  );
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -58,17 +58,45 @@ const StudentForm = ({
   // Fetch student data if editing
   useEffect(() => {
     if (isEditing && studentId) {
-      // For demo purposes, using mock data
-      // In a real scenario, would fetch from API or database
-      const mockStudentData = {
-        name: 'John Doe',
-        registrationNo: 'REG2023001',
-        phoneNumber: '9876543210',
+      const fetchStudent = async () => {
+        setIsLoading(true);
+        try {
+          const { data, error } = await supabase
+            .from('students')
+            .select('*')
+            .eq('id', studentId)
+            .single();
+          
+          if (error) {
+            throw error;
+          }
+          
+          if (data) {
+            form.reset({
+              name: data.name,
+              registrationNo: data.registration_no,
+              phoneNumber: data.phone_number,
+            });
+            
+            if (data.photo_url) {
+              setPhotoPreview(data.photo_url);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching student:', error);
+          toast({
+            title: "Error",
+            description: "Failed to fetch student data. Please try again.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsLoading(false);
+        }
       };
       
-      form.reset(mockStudentData);
+      fetchStudent();
     }
-  }, [isEditing, studentId, form]);
+  }, [isEditing, studentId, form, toast]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -83,11 +111,11 @@ const StudentForm = ({
     setPhotoPreview(null);
   };
 
-  const onSubmit = (data: StudentFormValues) => {
+  const onSubmit = async (data: StudentFormValues) => {
     setIsSubmitting(true);
 
     // Simple validation for photo
-    if (!photoPreview) {
+    if (!photoPreview && !isEditing) {
       toast({
         title: "Validation Error",
         description: "Student photo is required",
@@ -97,21 +125,79 @@ const StudentForm = ({
       return;
     }
 
-    // In a real app, this would be an API call to save the student
-    setTimeout(() => {
-      toast({
-        title: isEditing ? "Student Updated" : "Student Added",
-        description: `${data.name} has been ${isEditing ? 'updated' : 'added'} successfully.`,
-      });
+    try {
+      let photoUrl = photoPreview;
       
+      // Upload photo if there's a new one
+      if (photoFile) {
+        const fileName = `${Date.now()}-${photoFile.name}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('students')
+          .upload(fileName, photoFile);
+        
+        if (uploadError) {
+          throw uploadError;
+        }
+        
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('students')
+          .getPublicUrl(fileName);
+          
+        photoUrl = urlData.publicUrl;
+      }
+      
+      const studentData = {
+        name: data.name,
+        registration_no: data.registrationNo,
+        phone_number: data.phoneNumber,
+        photo_url: photoUrl,
+        room_id: roomId,
+      };
+      
+      if (isEditing && studentId) {
+        // Update existing student
+        const { error } = await supabase
+          .from('students')
+          .update(studentData)
+          .eq('id', studentId);
+          
+        if (error) throw error;
+        
+        toast({
+          title: "Student Updated",
+          description: `${data.name} has been updated successfully.`,
+        });
+      } else {
+        // Insert new student
+        const { error } = await supabase
+          .from('students')
+          .insert([studentData]);
+          
+        if (error) throw error;
+        
+        toast({
+          title: "Student Added",
+          description: `${data.name} has been added successfully.`,
+        });
+      }
+      
+      // Navigate back
       if (buildingId && blockId && floorId && roomId) {
         navigate(`/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms`);
       } else {
         navigate('/dashboard');
       }
-      
+    } catch (error) {
+      console.error('Error saving student:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save student data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
       setIsSubmitting(false);
-    }, 1000);
+    }
   };
 
   const getBackLink = () => {
@@ -120,6 +206,12 @@ const StudentForm = ({
     }
     return '/dashboard';
   };
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-64">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+    </div>;
+  }
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm">
