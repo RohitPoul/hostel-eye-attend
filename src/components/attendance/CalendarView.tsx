@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -148,12 +149,12 @@ const CalendarView = () => {
                 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Building</label>
-                  <Select value={filterBuilding || ''} onValueChange={setFilterBuilding}>
+                  <Select value={filterBuilding || "all-buildings"} onValueChange={setFilterBuilding}>
                     <SelectTrigger>
                       <SelectValue placeholder="All Buildings" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Buildings</SelectItem>
+                      <SelectItem value="all-buildings">All Buildings</SelectItem>
                       <SelectItem value="1">Satyaadi</SelectItem>
                       <SelectItem value="2">Ananya</SelectItem>
                     </SelectContent>
@@ -162,12 +163,12 @@ const CalendarView = () => {
                 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Block</label>
-                  <Select value={filterBlock || ''} onValueChange={setFilterBlock}>
+                  <Select value={filterBlock || "all-blocks"} onValueChange={setFilterBlock}>
                     <SelectTrigger>
                       <SelectValue placeholder="All Blocks" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Blocks</SelectItem>
+                      <SelectItem value="all-blocks">All Blocks</SelectItem>
                       <SelectItem value="A">Block A</SelectItem>
                       <SelectItem value="B">Block B</SelectItem>
                       <SelectItem value="C">Block C</SelectItem>
@@ -178,12 +179,12 @@ const CalendarView = () => {
                 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Floor</label>
-                  <Select value={filterFloor || ''} onValueChange={setFilterFloor}>
+                  <Select value={filterFloor || "all-floors"} onValueChange={setFilterFloor}>
                     <SelectTrigger>
                       <SelectValue placeholder="All Floors" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Floors</SelectItem>
+                      <SelectItem value="all-floors">All Floors</SelectItem>
                       <SelectItem value="1">1st Floor</SelectItem>
                       <SelectItem value="2">2nd Floor</SelectItem>
                       <SelectItem value="3">3rd Floor</SelectItem>
@@ -194,12 +195,12 @@ const CalendarView = () => {
                 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Room</label>
-                  <Select value={filterRoom || ''} onValueChange={setFilterRoom}>
+                  <Select value={filterRoom || "all-rooms"} onValueChange={setFilterRoom}>
                     <SelectTrigger>
                       <SelectValue placeholder="All Rooms" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Rooms</SelectItem>
+                      <SelectItem value="all-rooms">All Rooms</SelectItem>
                       <SelectItem value="NAF-01">NAF-01</SelectItem>
                       <SelectItem value="NAF-02">NAF-02</SelectItem>
                       <SelectItem value="NAF-03">NAF-03</SelectItem>
