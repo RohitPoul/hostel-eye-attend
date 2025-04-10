@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,13 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const dummyAttendanceData = {
+type AttendanceStatus = 'P' | 'A' | 'L' | 'H';
+
+interface AttendanceRecord {
+  status: AttendanceStatus;
+}
+
+const dummyAttendanceData: Record<string, AttendanceRecord> = {
   '2025-04-01': { status: 'P' },
   '2025-04-02': { status: 'P' },
   '2025-04-03': { status: 'A' },
@@ -25,12 +30,6 @@ const dummyAttendanceData = {
   '2025-04-09': { status: 'H' },
   '2025-04-10': { status: 'P' },
 };
-
-type AttendanceStatus = 'P' | 'A' | 'L' | 'H';
-
-interface AttendanceRecord {
-  status: AttendanceStatus;
-}
 
 const statusColors = {
   'P': 'bg-green-100 text-green-800',
@@ -72,12 +71,10 @@ const CalendarView = () => {
     
     const days = [];
     
-    // Add empty cells for days before the 1st of the month
     for (let i = 0; i < firstDay; i++) {
       days.push(null);
     }
     
-    // Add days of the month
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(i);
     }
@@ -110,7 +107,7 @@ const CalendarView = () => {
 
   const getAttendanceForDay = (day: number) => {
     const dateString = formatDateString(day);
-    return attendanceData[dateString] || { status: '-' };
+    return attendanceData[dateString] || { status: '-' as AttendanceStatus | '-' };
   };
 
   const getStatusClass = (status: AttendanceStatus | '-') => {
@@ -120,7 +117,6 @@ const CalendarView = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header section with filters */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
         <div>
           <h2 className="text-xl font-semibold">Attendance Records</h2>
@@ -243,13 +239,13 @@ const CalendarView = () => {
                 selected={selectedDate}
                 onSelect={setSelectedDate}
                 initialFocus
+                className="pointer-events-auto"
               />
             </PopoverContent>
           </Popover>
         </div>
       </div>
       
-      {/* Legend */}
       <div className="flex flex-wrap gap-3">
         {Object.entries(statusLabels).map(([status, label]) => (
           <div key={status} className="flex items-center">
@@ -259,7 +255,6 @@ const CalendarView = () => {
         ))}
       </div>
       
-      {/* Calendar */}
       <Card className="p-4">
         <div className="flex justify-between items-center mb-4">
           <Button
@@ -283,16 +278,13 @@ const CalendarView = () => {
           </Button>
         </div>
         
-        {/* Calendar Grid */}
         <div className="grid grid-cols-7 gap-1">
-          {/* Days of Week */}
           {DAYS.map((day) => (
             <div key={day} className="text-center font-medium p-2 text-gray-500">
               {day}
             </div>
           ))}
           
-          {/* Calendar Days */}
           {generateCalendarDays().map((day, index) => (
             <div
               key={index}
