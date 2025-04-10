@@ -1,8 +1,12 @@
-import { useLocation } from "react-router-dom";
+
+import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { ArrowLeft, Home } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const NotFound = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     console.error(
@@ -11,14 +15,60 @@ const NotFound = () => {
     );
   }, [location.pathname]);
 
+  const handleGoBack = () => {
+    // Navigate back to previous page, or to a safe fallback if no history
+    if (location.pathname.includes('/rooms')) {
+      // Extract building, block, and floor IDs from the URL to navigate back safely
+      const pathParts = location.pathname.split('/');
+      const buildingIndex = pathParts.indexOf('buildings');
+      
+      if (buildingIndex !== -1 && pathParts.length > buildingIndex + 1) {
+        const buildingId = pathParts[buildingIndex + 1];
+        const blockIndex = pathParts.indexOf('blocks');
+        
+        if (blockIndex !== -1 && pathParts.length > blockIndex + 1) {
+          const blockId = pathParts[blockIndex + 1];
+          navigate(`/buildings/${buildingId}/blocks/${blockId}/floors`);
+          return;
+        }
+        
+        navigate(`/buildings/${buildingId}/blocks`);
+        return;
+      }
+      
+      // Fallback to buildings list
+      navigate('/buildings');
+    } else {
+      // For other routes, just go back or to home
+      navigate(-1);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">404</h1>
-        <p className="text-xl text-gray-600 mb-4">Oops! Page not found</p>
-        <a href="/" className="text-blue-500 hover:text-blue-700 underline">
-          Return to Home
-        </a>
+      <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
+        <h1 className="text-6xl font-bold mb-2 text-red-500">404</h1>
+        <p className="text-xl text-gray-600 mb-6">Oops! Page not found</p>
+        <p className="text-gray-500 mb-8">
+          The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.
+        </p>
+        <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 justify-center">
+          <Button 
+            variant="outline" 
+            className="flex items-center" 
+            onClick={handleGoBack}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Go Back
+          </Button>
+          <Button 
+            className="flex items-center" 
+            onClick={() => navigate('/')}
+          >
+            <Home className="h-4 w-4 mr-2" />
+            Return to Home
+          </Button>
+        </div>
       </div>
     </div>
   );

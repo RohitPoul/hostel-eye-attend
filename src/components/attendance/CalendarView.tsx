@@ -1,11 +1,14 @@
-
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter, User, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { toast } from '@/hooks/use-toast';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -17,7 +20,22 @@ type AttendanceStatus = 'P' | 'A' | 'L' | 'H';
 
 interface AttendanceRecord {
   status: AttendanceStatus;
+  studentId?: string;
+  studentName?: string;
 }
+
+interface Student {
+  id: string;
+  name: string;
+  registrationNo: string;
+}
+
+const dummyStudents: Student[] = [
+  { id: 's1', name: 'John Doe', registrationNo: 'REG2023001' },
+  { id: 's2', name: 'Jane Smith', registrationNo: 'REG2023002' },
+  { id: 's3', name: 'Alex Johnson', registrationNo: 'REG2023003' },
+  { id: 's4', name: 'Emily Davis', registrationNo: 'REG2023004' },
+];
 
 const dummyAttendanceData: Record<string, AttendanceRecord> = {
   '2025-04-01': { status: 'P' },
@@ -57,6 +75,12 @@ const CalendarView = () => {
   const [filterFloor, setFilterFloor] = useState<string | null>(null);
   const [filterRoom, setFilterRoom] = useState<string | null>(null);
   const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceRecord>>(dummyAttendanceData);
+  
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [isStudentListOpen, setIsStudentListOpen] = useState(false);
+  const [isHolidayDialogOpen, setIsHolidayDialogOpen] = useState(false);
+  const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
   const getDaysInMonth = (year: number, month: number) => {
     return new Date(year, month + 1, 0).getDate();
@@ -114,6 +138,56 @@ const CalendarView = () => {
   const getStatusClass = (status: AttendanceStatus | '-') => {
     if (status === '-') return 'bg-gray-100 text-gray-500';
     return statusColors[status] || 'bg-gray-100 text-gray-500';
+  };
+
+  const handleDayClick = (day: number) => {
+    setSelectedDay(day);
+    setIsStudentListOpen(true);
+  };
+
+  const markAsHoliday = () => {
+    if (selectedDay) {
+      const dateString = formatDateString(selectedDay);
+      const updatedAttendanceData = { ...attendanceData };
+      
+      updatedAttendanceData[dateString] = { status: 'H' };
+      
+      setAttendanceData(updatedAttendanceData);
+      setIsHolidayDialogOpen(false);
+      
+      toast({
+        title: "Holiday Marked",
+        description: `${MONTHS[selectedMonth]} ${selectedDay}, ${selectedYear} has been marked as a holiday.`,
+      });
+    }
+  };
+
+  const markStudentLeave = () => {
+    if (selectedDay && selectedStudent) {
+      const dateString = formatDateString(selectedDay);
+      const updatedAttendanceData = { ...attendanceData };
+      
+      updatedAttendanceData[dateString] = { 
+        status: 'L',
+        studentId: selectedStudent.id,
+        studentName: selectedStudent.name
+      };
+      
+      setAttendanceData(updatedAttendanceData);
+      setIsLeaveDialogOpen(false);
+      setSelectedStudent(null);
+      
+      toast({
+        title: "Leave Marked",
+        description: `${selectedStudent.name} has been marked on leave for ${MONTHS[selectedMonth]} ${selectedDay}, ${selectedYear}.`,
+      });
+    }
+  };
+
+  const handleStudentSelect = (student: Student) => {
+    setSelectedStudent(student);
+    setIsLeaveDialogOpen(true);
+    setIsStudentListOpen(false);
   };
 
   return (
@@ -290,8 +364,9 @@ const CalendarView = () => {
             <div
               key={index}
               className={`p-2 h-20 border rounded-md ${
-                day === null ? 'bg-gray-50' : 'bg-white'
+                day === null ? 'bg-gray-50' : 'bg-white cursor-pointer hover:bg-gray-50'
               }`}
+              onClick={() => day !== null && handleDayClick(day)}
             >
               {day !== null && (
                 <>
@@ -320,6 +395,114 @@ const CalendarView = () => {
           ))}
         </div>
       </Card>
+
+      <Dialog open={isStudentListOpen} onOpenChange={setIsStudentListOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedDay && `${MONTHS[selectedMonth]} ${selectedDay}, ${selectedYear}`}
+            </DialogTitle>
+            <DialogDescription>
+              View and manage attendance for this day
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="flex justify-between items-center">
+              <h4 className="font-medium">Student Attendance</h4>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-blue-600"
+                onClick={() => {
+                  setIsStudentListOpen(false);
+                  setIsHolidayDialogOpen(true);
+                }}
+              >
+                <PlusCircle className="h-4 w-4 mr-2" />
+                Mark as Holiday
+              </Button>
+            </div>
+            
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Reg No.</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dummyStudents.map((student) => (
+                  <TableRow key={student.id}>
+                    <TableCell className="font-medium">{student.name}</TableCell>
+                    <TableCell>{student.registrationNo}</TableCell>
+                    <TableCell>
+                      {selectedDay && (
+                        <Badge className={getStatusClass(getAttendanceForDay(selectedDay).status)}>
+                          {getAttendanceForDay(selectedDay).status !== '-' 
+                            ? statusLabels[getAttendanceForDay(selectedDay).status as AttendanceStatus] 
+                            : 'Not Marked'}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleStudentSelect(student)}
+                      >
+                        Mark Leave
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isHolidayDialogOpen} onOpenChange={setIsHolidayDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark as Holiday</DialogTitle>
+            <DialogDescription>
+              This will mark the day as a holiday for all students. This action can be undone later.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsHolidayDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={markAsHoliday}>
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isLeaveDialogOpen} onOpenChange={setIsLeaveDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark Student Leave</DialogTitle>
+            <DialogDescription>
+              {selectedStudent && `Mark ${selectedStudent.name} as on leave for ${selectedDay && MONTHS[selectedMonth]} ${selectedDay}, ${selectedYear}.`}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLeaveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={markStudentLeave}>
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
