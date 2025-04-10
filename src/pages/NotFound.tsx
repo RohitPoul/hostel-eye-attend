@@ -16,8 +16,46 @@ const NotFound = () => {
   }, [location.pathname]);
 
   const handleGoBack = () => {
-    // Navigate back to previous page, or to a safe fallback if no history
-    if (location.pathname.includes('/rooms')) {
+    // If the URL contains student-related paths, handle them specially
+    if (location.pathname.includes('student')) {
+      // Extract building, block, floor, and room IDs from the URL to navigate back safely
+      const pathParts = location.pathname.split('/');
+      const buildingIndex = pathParts.indexOf('buildings');
+      
+      if (buildingIndex !== -1 && pathParts.length > buildingIndex + 1) {
+        const buildingId = pathParts[buildingIndex + 1];
+        const blockIndex = pathParts.indexOf('blocks');
+        
+        if (blockIndex !== -1 && pathParts.length > blockIndex + 1) {
+          const blockId = pathParts[blockIndex + 1];
+          const floorIndex = pathParts.indexOf('floors');
+          
+          if (floorIndex !== -1 && pathParts.length > floorIndex + 1) {
+            const floorId = pathParts[floorIndex + 1];
+            const roomIndex = pathParts.indexOf('rooms');
+            
+            if (roomIndex !== -1 && pathParts.length > roomIndex + 1) {
+              const roomId = pathParts[roomIndex + 1];
+              // Navigate back to the room page
+              navigate(`/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms`);
+              return;
+            }
+            
+            // Navigate back to the floors page
+            navigate(`/buildings/${buildingId}/blocks/${blockId}/floors`);
+            return;
+          }
+          
+          // Navigate back to the blocks page
+          navigate(`/buildings/${buildingId}/blocks`);
+          return;
+        }
+        
+        // Navigate back to the buildings page
+        navigate(`/buildings`);
+        return;
+      }
+    } else if (location.pathname.includes('/rooms')) {
       // Extract building, block, and floor IDs from the URL to navigate back safely
       const pathParts = location.pathname.split('/');
       const buildingIndex = pathParts.indexOf('buildings');
@@ -28,6 +66,14 @@ const NotFound = () => {
         
         if (blockIndex !== -1 && pathParts.length > blockIndex + 1) {
           const blockId = pathParts[blockIndex + 1];
+          const floorIndex = pathParts.indexOf('floors');
+          
+          if (floorIndex !== -1 && pathParts.length > floorIndex + 1) {
+            const floorId = pathParts[floorIndex + 1];
+            navigate(`/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms`);
+            return;
+          }
+          
           navigate(`/buildings/${buildingId}/blocks/${blockId}/floors`);
           return;
         }
@@ -38,10 +84,11 @@ const NotFound = () => {
       
       // Fallback to buildings list
       navigate('/buildings');
-    } else {
-      // For other routes, just go back or to home
-      navigate(-1);
+      return;
     }
+    
+    // For other routes, just go back or to home
+    navigate(-1);
   };
 
   return (

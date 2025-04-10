@@ -88,6 +88,15 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
           .insert(blocks);
         
         if (blocksError) throw blocksError;
+
+        // For each block, create floors
+        const floorsPerBlock = parseInt(data.floorsPerBlock);
+        const roomsPerFloor = parseInt(data.roomsPerFloor);
+        
+        if (floorsPerBlock > 0 && roomsPerFloor > 0) {
+          // We would create floors and rooms here
+          // This will be implemented in a later task
+        }
       }
       
       return newBuilding;

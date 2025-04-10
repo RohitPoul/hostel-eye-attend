@@ -44,6 +44,7 @@ const App = () => {
             <Route path="/buildings/:buildingId/blocks/:blockId/floors/:floorId/rooms/:roomId/add-student" element={<StudentFormPage />} />
             <Route path="/buildings/:buildingId/blocks/:blockId/floors/:floorId/rooms/:roomId/edit-student/:studentId" element={<StudentFormPage />} />
             <Route path="/students/:studentId" element={<StudentFormPage />} />
+            <Route path="/buildings/:buildingId/blocks/:blockId/floors/:floorId/rooms/edit-student/:studentId" element={<StudentFormPage />} />
             
             {/* Attendance Routes */}
             <Route path="/attendance" element={<AttendancePage />} />
