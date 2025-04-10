@@ -1,24 +1,42 @@
 
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+// Define the form schema with Zod
+const studentSchema = z.object({
+  name: z.string().min(2, { message: "Name must be at least 2 characters" }),
+  registrationNo: z.string().min(3, { message: "Registration number must be at least 3 characters" }),
+  phoneNumber: z.string().min(10, { message: "Phone number must be at least 10 digits" }),
+});
+
+type StudentFormValues = z.infer<typeof studentSchema>;
 
 interface StudentFormProps {
   isEditing?: boolean;
   studentId?: string;
+  buildingId?: string;
+  blockId?: string;
+  floorId?: string;
+  roomId?: string;
 }
 
-const StudentForm = ({ isEditing = false, studentId }: StudentFormProps) => {
-  const { buildingId, blockId, floorId, roomId } = useParams();
-  const [formData, setFormData] = useState({
-    name: isEditing ? 'John Doe' : '',
-    registrationNo: isEditing ? 'REG2023001' : '',
-    phoneNumber: isEditing ? '9876543210' : '',
-  });
+const StudentForm = ({ 
+  isEditing = false, 
+  studentId, 
+  buildingId, 
+  blockId, 
+  floorId, 
+  roomId 
+}: StudentFormProps) => {
   const [photoPreview, setPhotoPreview] = useState<string | null>(
     isEditing ? 'https://i.pravatar.cc/150?img=1' : null
   );
@@ -26,14 +44,31 @@ const StudentForm = ({ isEditing = false, studentId }: StudentFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // Initialize form
+  const form = useForm<StudentFormValues>({
+    resolver: zodResolver(studentSchema),
+    defaultValues: {
+      name: '',
+      registrationNo: '',
+      phoneNumber: '',
+    },
+  });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
-  };
+  // Fetch student data if editing
+  useEffect(() => {
+    if (isEditing && studentId) {
+      // For demo purposes, using mock data
+      // In a real scenario, would fetch from API or database
+      const mockStudentData = {
+        name: 'John Doe',
+        registrationNo: 'REG2023001',
+        phoneNumber: '9876543210',
+      };
+      
+      form.reset(mockStudentData);
+    }
+  }, [isEditing, studentId, form]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -48,15 +83,14 @@ const StudentForm = ({ isEditing = false, studentId }: StudentFormProps) => {
     setPhotoPreview(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = (data: StudentFormValues) => {
     setIsSubmitting(true);
 
-    // Simple validation
-    if (!formData.name || !formData.registrationNo || !formData.phoneNumber || !photoPreview) {
+    // Simple validation for photo
+    if (!photoPreview) {
       toast({
         title: "Validation Error",
-        description: "All fields and photo are required",
+        description: "Student photo is required",
         variant: "destructive",
       });
       setIsSubmitting(false);
@@ -67,31 +101,24 @@ const StudentForm = ({ isEditing = false, studentId }: StudentFormProps) => {
     setTimeout(() => {
       toast({
         title: isEditing ? "Student Updated" : "Student Added",
-        description: `${formData.name} has been ${isEditing ? 'updated' : 'added'} successfully.`,
+        description: `${data.name} has been ${isEditing ? 'updated' : 'added'} successfully.`,
       });
       
       if (buildingId && blockId && floorId && roomId) {
-        navigate(`/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms/${roomId}`);
+        navigate(`/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms`);
       } else {
-        navigate('/students');
+        navigate('/dashboard');
       }
       
       setIsSubmitting(false);
     }, 1000);
   };
 
-  const getPageTitle = () => {
-    if (isEditing) {
-      return 'Edit Student';
-    }
-    return 'Add New Student';
-  };
-
   const getBackLink = () => {
     if (buildingId && blockId && floorId && roomId) {
-      return `/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms/${roomId}`;
+      return `/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms`;
     }
-    return '/students';
+    return '/dashboard';
   };
 
   return (
@@ -107,98 +134,106 @@ const StudentForm = ({ isEditing = false, studentId }: StudentFormProps) => {
         </Button>
       </div>
 
-      <h2 className="text-xl font-semibold mb-6">{getPageTitle()}</h2>
+      <h2 className="text-xl font-semibold mb-6">{isEditing ? 'Edit Student' : 'Add New Student'}</h2>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label htmlFor="name">Full Name</Label>
-            <Input
-              id="name"
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormField
+              control={form.control}
               name="name"
-              placeholder="e.g. John Doe"
-              value={formData.name}
-              onChange={handleChange}
-              required
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Full Name</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g. John Doe" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="registrationNo">Registration Number</Label>
-            <Input
-              id="registrationNo"
+            <FormField
+              control={form.control}
               name="registrationNo"
-              placeholder="e.g. REG2023001"
-              value={formData.registrationNo}
-              onChange={handleChange}
-              required
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Registration Number</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g. REG2023001" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phoneNumber">Phone Number</Label>
-            <Input
-              id="phoneNumber"
+            <FormField
+              control={form.control}
               name="phoneNumber"
-              placeholder="e.g. 9876543210"
-              value={formData.phoneNumber}
-              onChange={handleChange}
-              required
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Phone Number</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g. 9876543210" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          <div className="space-y-2">
-            <Label>Student Photo</Label>
-            {photoPreview ? (
-              <div className="relative h-32 w-32 rounded-md overflow-hidden border">
-                <img
-                  src={photoPreview}
-                  alt="Student"
-                  className="h-full w-full object-cover"
-                />
-                <button
-                  type="button"
-                  className="absolute top-2 right-2 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center"
-                  onClick={removePhoto}
+            <div className="space-y-2">
+              <Label>Student Photo</Label>
+              {photoPreview ? (
+                <div className="relative h-32 w-32 rounded-md overflow-hidden border">
+                  <img
+                    src={photoPreview}
+                    alt="Student"
+                    className="h-full w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    className="absolute top-2 right-2 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center"
+                    onClick={removePhoto}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="h-32 w-32 border-2 border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors"
+                  onClick={() => document.getElementById('photo')?.click()}
                 >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="h-32 w-32 border-2 border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors"
-                onClick={() => document.getElementById('photo')?.click()}
-              >
-                <Upload className="h-8 w-8 text-gray-400" />
-                <span className="text-sm text-gray-500 mt-2">Upload Photo</span>
-                <Input
-                  id="photo"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handlePhotoChange}
-                />
-              </div>
-            )}
+                  <Upload className="h-8 w-8 text-gray-400" />
+                  <span className="text-sm text-gray-500 mt-2">Upload Photo</span>
+                  <Input
+                    id="photo"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoChange}
+                  />
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="flex justify-end space-x-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate(getBackLink())}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            className="bg-primary hover:bg-primary-dark"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (isEditing ? 'Updating...' : 'Adding...') : (isEditing ? 'Update Student' : 'Add Student')}
-          </Button>
-        </div>
-      </form>
+          <div className="flex justify-end space-x-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate(getBackLink())}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              className="bg-primary hover:bg-primary-dark"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (isEditing ? 'Updating...' : 'Adding...') : (isEditing ? 'Update Student' : 'Add Student')}
+            </Button>
+          </div>
+        </form>
+      </Form>
     </div>
   );
 };
