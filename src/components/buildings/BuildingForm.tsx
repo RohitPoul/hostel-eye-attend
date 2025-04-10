@@ -14,6 +14,11 @@ interface BuildingFormProps {
   buildingId?: string;
 }
 
+interface Building {
+  id: string;
+  name: string;
+}
+
 const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
   const [formData, setFormData] = useState({
     name: '',
@@ -50,8 +55,6 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
   // Set form data when building data is loaded
   useEffect(() => {
     if (buildingData) {
-      // For the existing building, we need to get the block count, floors per block and rooms per floor
-      // In a real app, this would be properly stored in the database
       setFormData(prev => ({
         ...prev,
         name: buildingData.name || '',
@@ -70,6 +73,7 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
         .single();
       
       if (error) throw error;
+      if (!newBuilding) throw new Error('Failed to create building');
       
       // Then create the blocks
       const blockCount = parseInt(data.blocks);
