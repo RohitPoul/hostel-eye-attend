@@ -1,30 +1,104 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building, ChevronRight, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface BuildingProps {
   id: string;
   name: string;
-  blockCount: number;
+  blockCount?: number;
 }
 
-const dummyBuildings: BuildingProps[] = [
-  { id: '1', name: 'Satyaadi', blockCount: 4 },
-  { id: '2', name: 'Ananya', blockCount: 3 },
-];
-
 const BuildingList = () => {
-  const [buildings, setBuildings] = useState<BuildingProps[]>(dummyBuildings);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [buildingToDelete, setBuildingToDelete] = useState<BuildingProps | null>(null);
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch buildings from Supabase
+  const fetchBuildings = async (): Promise<BuildingProps[]> => {
+    console.log('Fetching buildings...');
+    const { data, error } = await supabase
+      .from('buildings')
+      .select('id, name')
+      .order('name');
+
+    if (error) {
+      console.error('Error fetching buildings:', error);
+      throw error;
+    }
+
+    // Count blocks for each building
+    const buildingsWithBlockCount = await Promise.all(
+      data.map(async (building) => {
+        const { count, error: countError } = await supabase
+          .from('blocks')
+          .select('id', { count: 'exact', head: true })
+          .eq('building_id', building.id);
+
+        if (countError) {
+          console.error('Error counting blocks:', countError);
+          return { ...building, blockCount: 0 };
+        }
+
+        return { ...building, blockCount: count || 0 };
+      })
+    );
+
+    console.log('Buildings fetched:', buildingsWithBlockCount);
+    return buildingsWithBlockCount;
+  };
+
+  // Use React Query to fetch buildings
+  const { data: buildings = [], isLoading, error } = useQuery({
+    queryKey: ['buildings'],
+    queryFn: fetchBuildings,
+  });
+
+  // Delete building mutation
+  const deleteBuilding = useMutation({
+    mutationFn: async (id: string) => {
+      console.log('Deleting building:', id);
+      const { error } = await supabase
+        .from('buildings')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting building:', error);
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      // Invalidate the buildings query to trigger a refetch
+      queryClient.invalidateQueries({ queryKey: ['buildings'] });
+      
+      toast({
+        title: "Building Deleted",
+        description: `${buildingToDelete?.name} has been removed successfully.`,
+      });
+      
+      setIsDeleteDialogOpen(false);
+      setBuildingToDelete(null);
+      setPassword('');
+    },
+    onError: (error) => {
+      console.error('Mutation error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete building. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
 
   const handleDeleteClick = (building: BuildingProps) => {
     setBuildingToDelete(building);
@@ -43,19 +117,25 @@ const BuildingList = () => {
     }
 
     if (buildingToDelete) {
-      const updatedBuildings = buildings.filter(b => b.id !== buildingToDelete.id);
-      setBuildings(updatedBuildings);
-      
-      toast({
-        title: "Building Deleted",
-        description: `${buildingToDelete.name} has been removed successfully.`,
-      });
-      
-      setIsDeleteDialogOpen(false);
-      setBuildingToDelete(null);
-      setPassword('');
+      deleteBuilding.mutate(buildingToDelete.id);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-lg text-gray-500">Loading buildings...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-lg text-red-500">Error loading buildings. Please try again.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -150,8 +230,9 @@ const BuildingList = () => {
             <Button
               variant="destructive"
               onClick={confirmDelete}
+              disabled={deleteBuilding.isPending}
             >
-              Delete
+              {deleteBuilding.isPending ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

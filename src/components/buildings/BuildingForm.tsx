@@ -1,11 +1,13 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface BuildingFormProps {
   isEditing?: boolean;
@@ -14,14 +16,124 @@ interface BuildingFormProps {
 
 const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
   const [formData, setFormData] = useState({
-    name: isEditing ? 'Satyaadi' : '',
-    blocks: isEditing ? '4' : '',
-    floorsPerBlock: isEditing ? '4' : '',
-    roomsPerFloor: isEditing ? '8' : '',
+    name: '',
+    blocks: '4',
+    floorsPerBlock: '4',
+    roomsPerFloor: '8',
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch building data if editing
+  const { data: buildingData, isLoading: isFetchingBuilding } = useQuery({
+    queryKey: ['building', buildingId],
+    queryFn: async () => {
+      if (!buildingId || !isEditing) return null;
+      
+      const { data, error } = await supabase
+        .from('buildings')
+        .select('*')
+        .eq('id', buildingId)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching building:', error);
+        throw error;
+      }
+      
+      return data;
+    },
+    enabled: isEditing && !!buildingId,
+  });
+
+  // Set form data when building data is loaded
+  useEffect(() => {
+    if (buildingData) {
+      // For the existing building, we need to get the block count, floors per block and rooms per floor
+      // In a real app, this would be properly stored in the database
+      setFormData(prev => ({
+        ...prev,
+        name: buildingData.name || '',
+      }));
+    }
+  }, [buildingData]);
+
+  // Create building mutation
+  const createBuilding = useMutation({
+    mutationFn: async (data: typeof formData) => {
+      // First, insert the building
+      const { data: newBuilding, error } = await supabase
+        .from('buildings')
+        .insert([{ name: data.name }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Then create the blocks
+      const blockCount = parseInt(data.blocks);
+      if (blockCount > 0) {
+        const blocks = Array.from({ length: blockCount }).map((_, i) => ({
+          building_id: newBuilding.id,
+          name: `Block ${String.fromCharCode(65 + i)}`, // Block A, Block B, etc.
+        }));
+        
+        const { error: blocksError } = await supabase
+          .from('blocks')
+          .insert(blocks);
+        
+        if (blocksError) throw blocksError;
+      }
+      
+      return newBuilding;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['buildings'] });
+      toast({
+        title: "Building Created",
+        description: `${formData.name} has been added successfully.`,
+      });
+      navigate('/buildings');
+    },
+    onError: (error) => {
+      console.error('Error creating building:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create building. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Update building mutation
+  const updateBuilding = useMutation({
+    mutationFn: async (data: typeof formData) => {
+      const { error } = await supabase
+        .from('buildings')
+        .update({ name: data.name })
+        .eq('id', buildingId!);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['buildings'] });
+      queryClient.invalidateQueries({ queryKey: ['building', buildingId] });
+      toast({
+        title: "Building Updated",
+        description: `${formData.name} has been updated successfully.`,
+      });
+      navigate('/buildings');
+    },
+    onError: (error) => {
+      console.error('Error updating building:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update building. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -33,7 +145,6 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
 
     // Simple validation
     if (!formData.name || !formData.blocks || !formData.floorsPerBlock || !formData.roomsPerFloor) {
@@ -42,21 +153,23 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
         description: "All fields are required",
         variant: "destructive",
       });
-      setIsSubmitting(false);
       return;
     }
 
-    // In a real app, this would be an API call to save the building
-    setTimeout(() => {
-      toast({
-        title: isEditing ? "Building Updated" : "Building Created",
-        description: `${formData.name} has been ${isEditing ? 'updated' : 'added'} successfully.`,
-      });
-      
-      navigate('/buildings');
-      setIsSubmitting(false);
-    }, 1000);
+    if (isEditing && buildingId) {
+      updateBuilding.mutate(formData);
+    } else {
+      createBuilding.mutate(formData);
+    }
   };
+
+  if (isEditing && isFetchingBuilding) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-lg text-gray-500">Loading building data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm">
@@ -100,6 +213,7 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
               value={formData.blocks}
               onChange={handleChange}
               required
+              disabled={isEditing} // Can't change the number of blocks when editing
             />
           </div>
 
@@ -114,6 +228,7 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
               value={formData.floorsPerBlock}
               onChange={handleChange}
               required
+              disabled={isEditing} // Can't change the number of floors when editing
             />
           </div>
 
@@ -128,6 +243,7 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
               value={formData.roomsPerFloor}
               onChange={handleChange}
               required
+              disabled={isEditing} // Can't change the number of rooms when editing
             />
           </div>
         </div>
@@ -143,9 +259,11 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
           <Button
             type="submit"
             className="bg-primary hover:bg-primary-dark"
-            disabled={isSubmitting}
+            disabled={createBuilding.isPending || updateBuilding.isPending}
           >
-            {isSubmitting ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Building' : 'Create Building')}
+            {isEditing 
+              ? (updateBuilding.isPending ? 'Updating...' : 'Update Building') 
+              : (createBuilding.isPending ? 'Creating...' : 'Create Building')}
           </Button>
         </div>
       </form>
