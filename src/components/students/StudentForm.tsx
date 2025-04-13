@@ -12,6 +12,18 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/integrations/supabase/client';
 
+// Define the student type
+type Student = {
+  id: string;
+  name: string;
+  registration_no: string;
+  phone_number: string;
+  photo_url: string | null;
+  room_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // Define the form schema with Zod
 const studentSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters" }),
@@ -72,14 +84,17 @@ const StudentForm = ({
           }
           
           if (data) {
+            // Cast the data to our Student type
+            const student = data as Student;
+            
             form.reset({
-              name: data.name,
-              registrationNo: data.registration_no,
-              phoneNumber: data.phone_number,
+              name: student.name,
+              registrationNo: student.registration_no,
+              phoneNumber: student.phone_number,
             });
             
-            if (data.photo_url) {
-              setPhotoPreview(data.photo_url);
+            if (student.photo_url) {
+              setPhotoPreview(student.photo_url);
             }
           }
         } catch (error) {
