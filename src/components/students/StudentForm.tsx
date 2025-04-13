@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/integrations/supabase/client';
 
-// Define the student type to match our new database schema
+// Updated Student type to match the new database schema
 type Student = {
   id: string;
   name: string;
@@ -60,7 +60,7 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  // Initialize form
+  // Initialize form with default values
   const form = useForm<StudentFormValues>({
     resolver: zodResolver(studentSchema),
     defaultValues: {
@@ -68,10 +68,10 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
       registrationNo: '',
       phoneNumber: '',
       parentPhoneNumber: '',
-      buildingName: '',
-      blockName: '',
-      floorNumber: 1,
-      roomNumber: '',
+      buildingName: buildingId || '',
+      blockName: blockId || '',
+      floorNumber: floorId ? parseInt(floorId) : 1,
+      roomNumber: roomId || '',
     },
   });
 
@@ -92,7 +92,7 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
           }
           
           if (data) {
-            // Cast the data to our updated Student type
+            // Correctly cast the data to our Student type
             const student = data as Student;
             
             form.reset({
