@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,8 +18,12 @@ type Student = {
   name: string;
   registration_no: string;
   phone_number: string;
+  parent_phone_number: string;
+  building_name: string;
+  block_name: string;
+  floor_number: number;
+  room_number: string;
   photo_url: string | null;
-  room_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -29,32 +33,22 @@ const studentSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters" }),
   registrationNo: z.string().min(3, { message: "Registration number must be at least 3 characters" }),
   phoneNumber: z.string().min(10, { message: "Phone number must be at least 10 digits" }),
+  parentPhoneNumber: z.string().min(10, { message: "Parent's phone number must be at least 10 digits" }),
+  buildingName: z.string().min(1, { message: "Building name is required" }),
+  blockName: z.string().min(1, { message: "Block name is required" }),
+  floorNumber: z.number().min(1, { message: "Floor number must be at least 1" }),
+  roomNumber: z.string().min(1, { message: "Room number is required" }),
 });
 
 type StudentFormValues = z.infer<typeof studentSchema>;
 
-interface StudentFormProps {
-  isEditing?: boolean;
-  studentId?: string;
-  buildingId?: string;
-  blockId?: string;
-  floorId?: string;
-  roomId?: string;
-}
-
-const StudentForm = ({ 
-  isEditing = false, 
-  studentId, 
-  buildingId, 
-  blockId, 
-  floorId, 
-  roomId 
-}: StudentFormProps) => {
+const StudentForm = () => {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { studentId } = useParams<{ studentId: string }>();
   const { toast } = useToast();
   
   // Initialize form
@@ -64,12 +58,17 @@ const StudentForm = ({
       name: '',
       registrationNo: '',
       phoneNumber: '',
+      parentPhoneNumber: '',
+      buildingName: '',
+      blockName: '',
+      floorNumber: 1,
+      roomNumber: '',
     },
   });
 
   // Fetch student data if editing
   useEffect(() => {
-    if (isEditing && studentId) {
+    if (studentId) {
       const fetchStudent = async () => {
         setIsLoading(true);
         try {
@@ -91,6 +90,11 @@ const StudentForm = ({
               name: student.name,
               registrationNo: student.registration_no,
               phoneNumber: student.phone_number,
+              parentPhoneNumber: student.parent_phone_number,
+              buildingName: student.building_name,
+              blockName: student.block_name,
+              floorNumber: student.floor_number,
+              roomNumber: student.room_number,
             });
             
             if (student.photo_url) {
@@ -111,7 +115,7 @@ const StudentForm = ({
       
       fetchStudent();
     }
-  }, [isEditing, studentId, form, toast]);
+  }, [studentId, form, toast]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -130,7 +134,7 @@ const StudentForm = ({
     setIsSubmitting(true);
 
     // Simple validation for photo
-    if (!photoPreview && !isEditing) {
+    if (!photoPreview && !studentId) {
       toast({
         title: "Validation Error",
         description: "Student photo is required",
@@ -166,11 +170,15 @@ const StudentForm = ({
         name: data.name,
         registration_no: data.registrationNo,
         phone_number: data.phoneNumber,
+        parent_phone_number: data.parentPhoneNumber,
+        building_name: data.buildingName,
+        block_name: data.blockName,
+        floor_number: data.floorNumber,
+        room_number: data.roomNumber,
         photo_url: photoUrl,
-        room_id: roomId,
       };
       
-      if (isEditing && studentId) {
+      if (studentId) {
         // Update existing student
         const { error } = await supabase
           .from('students')
@@ -197,12 +205,8 @@ const StudentForm = ({
         });
       }
       
-      // Navigate back
-      if (buildingId && blockId && floorId && roomId) {
-        navigate(`/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms`);
-      } else {
-        navigate('/dashboard');
-      }
+      // Navigate back to previous page
+      navigate('/buildings');
     } catch (error) {
       console.error('Error saving student:', error);
       toast({
@@ -215,17 +219,12 @@ const StudentForm = ({
     }
   };
 
-  const getBackLink = () => {
-    if (buildingId && blockId && floorId && roomId) {
-      return `/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms`;
-    }
-    return '/dashboard';
-  };
-
   if (isLoading) {
-    return <div className="flex justify-center items-center h-64">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-    </div>;
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+      </div>
+    );
   }
 
   return (
@@ -234,14 +233,16 @@ const StudentForm = ({
         <Button
           variant="ghost"
           className="text-muted-foreground"
-          onClick={() => navigate(getBackLink())}
+          onClick={() => navigate('/buildings')}
         >
           <ChevronLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
       </div>
 
-      <h2 className="text-xl font-semibold mb-6">{isEditing ? 'Edit Student' : 'Add New Student'}</h2>
+      <h2 className="text-xl font-semibold mb-6">
+        {studentId ? 'Edit Student' : 'Add New Student'}
+      </h2>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -279,9 +280,84 @@ const StudentForm = ({
               name="phoneNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Phone Number</FormLabel>
+                  <FormLabel>Student Phone Number</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder="e.g. 9876543210" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="parentPhoneNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Parent Phone Number</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g. 9876543211" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="buildingName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Building Name</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g. Sahyadri" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="blockName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Block Name</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g. Block A" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="floorNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Floor Number</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      {...field} 
+                      onChange={(e) => field.onChange(Number(e.target.value))} 
+                      placeholder="e.g. 1" 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="roomNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Room Number</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g. 101" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -306,7 +382,8 @@ const StudentForm = ({
                   </button>
                 </div>
               ) : (
-                <div className="h-32 w-32 border-2 border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors"
+                <div 
+                  className="h-32 w-32 border-2 border-dashed border-gray-300 rounded-md flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors"
                   onClick={() => document.getElementById('photo')?.click()}
                 >
                   <Upload className="h-8 w-8 text-gray-400" />
@@ -327,7 +404,7 @@ const StudentForm = ({
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate(getBackLink())}
+              onClick={() => navigate('/buildings')}
             >
               Cancel
             </Button>
@@ -336,7 +413,9 @@ const StudentForm = ({
               className="bg-primary hover:bg-primary-dark"
               disabled={isSubmitting}
             >
-              {isSubmitting ? (isEditing ? 'Updating...' : 'Adding...') : (isEditing ? 'Update Student' : 'Add Student')}
+              {isSubmitting 
+                ? (studentId ? 'Updating...' : 'Adding...') 
+                : (studentId ? 'Update Student' : 'Add Student')}
             </Button>
           </div>
         </form>
