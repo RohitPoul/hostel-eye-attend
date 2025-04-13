@@ -62,35 +62,117 @@ export type Database = {
         }
         Relationships: []
       }
-      students: {
+      floors: {
         Row: {
+          block_id: string
           created_at: string
+          floor_number: number
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          block_id: string
+          created_at?: string
+          floor_number: number
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          block_id?: string
+          created_at?: string
+          floor_number?: number
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "floors_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rooms: {
+        Row: {
+          block_id: string
+          created_at: string
+          floor_id: number
           id: string
           name: string
+          updated_at: string
+        }
+        Insert: {
+          block_id: string
+          created_at?: string
+          floor_id: number
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          block_id?: string
+          created_at?: string
+          floor_id?: number
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rooms_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      students: {
+        Row: {
+          block_name: string | null
+          building_name: string | null
+          created_at: string
+          floor_number: number | null
+          id: string
+          name: string
+          parent_phone_number: string | null
           phone_number: string
           photo_url: string | null
           registration_no: string
           room_id: string | null
+          room_number: string | null
           updated_at: string
         }
         Insert: {
+          block_name?: string | null
+          building_name?: string | null
           created_at?: string
+          floor_number?: number | null
           id?: string
           name: string
+          parent_phone_number?: string | null
           phone_number: string
           photo_url?: string | null
           registration_no: string
           room_id?: string | null
+          room_number?: string | null
           updated_at?: string
         }
         Update: {
+          block_name?: string | null
+          building_name?: string | null
           created_at?: string
+          floor_number?: number | null
           id?: string
           name?: string
+          parent_phone_number?: string | null
           phone_number?: string
           photo_url?: string | null
           registration_no?: string
           room_id?: string | null
+          room_number?: string | null
           updated_at?: string
         }
         Relationships: []

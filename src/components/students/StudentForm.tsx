@@ -92,36 +92,20 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
           }
           
           if (data) {
-            // Here's where the type error was occurring
-            // We need to check if we have the new fields and provide default values if not
-            const student: Student = {
-              id: data.id,
-              name: data.name,
-              registration_no: data.registration_no,
-              phone_number: data.phone_number,
-              parent_phone_number: data.parent_phone_number || '',
-              building_name: data.building_name || '',
-              block_name: data.block_name || '',
-              floor_number: data.floor_number || 1,
-              room_number: data.room_number || '',
-              photo_url: data.photo_url,
-              created_at: data.created_at,
-              updated_at: data.updated_at,
-            };
-            
+            // Map the database fields to our form values
             form.reset({
-              name: student.name,
-              registrationNo: student.registration_no,
-              phoneNumber: student.phone_number,
-              parentPhoneNumber: student.parent_phone_number,
-              buildingName: student.building_name,
-              blockName: student.block_name,
-              floorNumber: student.floor_number,
-              roomNumber: student.room_number,
+              name: data.name,
+              registrationNo: data.registration_no,
+              phoneNumber: data.phone_number,
+              parentPhoneNumber: data.parent_phone_number || '',
+              buildingName: data.building_name || '',
+              blockName: data.block_name || '',
+              floorNumber: data.floor_number || 1,
+              roomNumber: data.room_number || '',
             });
             
-            if (student.photo_url) {
-              setPhotoPreview(student.photo_url);
+            if (data.photo_url) {
+              setPhotoPreview(data.photo_url);
             }
           }
         } catch (error) {
@@ -229,7 +213,7 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
       }
       
       // Navigate back to previous page
-      navigate('/buildings');
+      navigate(-1);
     } catch (error) {
       console.error('Error saving student:', error);
       toast({
@@ -256,7 +240,7 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
         <Button
           variant="ghost"
           className="text-muted-foreground"
-          onClick={() => navigate('/buildings')}
+          onClick={() => navigate(-1)}
         >
           <ChevronLeft className="h-4 w-4 mr-2" />
           Back
@@ -427,7 +411,7 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate('/buildings')}
+              onClick={() => navigate(-1)}
             >
               Cancel
             </Button>

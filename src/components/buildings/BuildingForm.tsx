@@ -83,9 +83,10 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
           name: `Block ${String.fromCharCode(65 + i)}`, // Block A, Block B, etc.
         }));
         
-        const { error: blocksError } = await supabase
+        const { data: createdBlocks, error: blocksError } = await supabase
           .from('blocks')
-          .insert(blocks);
+          .insert(blocks)
+          .select();
         
         if (blocksError) throw blocksError;
 
@@ -93,9 +94,38 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
         const floorsPerBlock = parseInt(data.floorsPerBlock);
         const roomsPerFloor = parseInt(data.roomsPerFloor);
         
-        if (floorsPerBlock > 0 && roomsPerFloor > 0) {
-          // We would create floors and rooms here
-          // This will be implemented in a later task
+        if (floorsPerBlock > 0 && roomsPerFloor > 0 && createdBlocks) {
+          for (const block of createdBlocks) {
+            // Create floors for each block
+            const floors = Array.from({ length: floorsPerBlock }).map((_, i) => ({
+              block_id: block.id,
+              floor_number: i + 1,
+            }));
+            
+            const { data: createdFloors, error: floorsError } = await supabase
+              .from('floors')
+              .insert(floors)
+              .select();
+            
+            if (floorsError) throw floorsError;
+            
+            // Create rooms for each floor
+            if (createdFloors) {
+              for (const floor of createdFloors) {
+                const rooms = Array.from({ length: roomsPerFloor }).map((_, i) => ({
+                  name: `${block.name.replace('Block ', '')}-${floor.floor_number}${String(i + 1).padStart(2, '0')}`,
+                  floor_id: floor.floor_number,
+                  block_id: block.id
+                }));
+                
+                const { error: roomsError } = await supabase
+                  .from('rooms')
+                  .insert(rooms);
+                
+                if (roomsError) throw roomsError;
+              }
+            }
+          }
         }
       }
       
@@ -128,6 +158,7 @@ const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
         .eq('id', buildingId!);
       
       if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['buildings'] });
