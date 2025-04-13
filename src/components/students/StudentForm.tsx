@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/integrations/supabase/client';
 
-// Define the student type
+// Define the student type to match our new database schema
 type Student = {
   id: string;
   name: string;
@@ -28,6 +28,16 @@ type Student = {
   updated_at: string;
 };
 
+// Define props for StudentForm component
+interface StudentFormProps {
+  isEditing?: boolean;
+  studentId?: string;
+  buildingId?: string;
+  blockId?: string;
+  floorId?: string;
+  roomId?: string;
+}
+
 // Define the form schema with Zod
 const studentSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters" }),
@@ -42,13 +52,12 @@ const studentSchema = z.object({
 
 type StudentFormValues = z.infer<typeof studentSchema>;
 
-const StudentForm = () => {
+const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorId, roomId }: StudentFormProps) => {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { studentId } = useParams<{ studentId: string }>();
   const { toast } = useToast();
   
   // Initialize form
@@ -83,7 +92,7 @@ const StudentForm = () => {
           }
           
           if (data) {
-            // Cast the data to our Student type
+            // Cast the data to our updated Student type
             const student = data as Student;
             
             form.reset({
@@ -241,7 +250,7 @@ const StudentForm = () => {
       </div>
 
       <h2 className="text-xl font-semibold mb-6">
-        {studentId ? 'Edit Student' : 'Add New Student'}
+        {isEditing ? 'Edit Student' : 'Add New Student'}
       </h2>
 
       <Form {...form}>
@@ -414,8 +423,8 @@ const StudentForm = () => {
               disabled={isSubmitting}
             >
               {isSubmitting 
-                ? (studentId ? 'Updating...' : 'Adding...') 
-                : (studentId ? 'Update Student' : 'Add Student')}
+                ? (isEditing ? 'Updating...' : 'Adding...') 
+                : (isEditing ? 'Update Student' : 'Add Student')}
             </Button>
           </div>
         </form>
