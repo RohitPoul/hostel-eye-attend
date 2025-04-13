@@ -106,7 +106,7 @@ const RoomList = () => {
         .from('floors')
         .select('id, block_id, floor_number')
         .eq('block_id', blockId)
-        .eq('floor_number', floorId)
+        .eq('floor_number', parseInt(floorId as string))
         .single();
       
       if (error) {
@@ -128,7 +128,7 @@ const RoomList = () => {
         .from('rooms')
         .select('*')
         .eq('block_id', blockId)
-        .eq('floor_id', floorId);
+        .eq('floor_id', parseInt(floorId as string));
       
       if (error) {
         console.error('Error fetching rooms:', error);
@@ -149,7 +149,7 @@ const RoomList = () => {
         .from('students')
         .select('*')
         .eq('block_name', block?.name || '')
-        .eq('floor_number', parseInt(floorId));
+        .eq('floor_number', parseInt(floorId as string));
       
       if (error) {
         console.error('Error fetching students:', error);

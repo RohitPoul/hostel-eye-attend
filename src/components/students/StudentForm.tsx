@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 
 // Updated Student type to match the new database schema
 type Student = {
@@ -44,10 +45,6 @@ const studentSchema = z.object({
   registrationNo: z.string().min(3, { message: "Registration number must be at least 3 characters" }),
   phoneNumber: z.string().min(10, { message: "Phone number must be at least 10 digits" }),
   parentPhoneNumber: z.string().min(10, { message: "Parent's phone number must be at least 10 digits" }),
-  buildingName: z.string().min(1, { message: "Building name is required" }),
-  blockName: z.string().min(1, { message: "Block name is required" }),
-  floorNumber: z.number().min(1, { message: "Floor number must be at least 1" }),
-  roomNumber: z.string().min(1, { message: "Room number is required" }),
 });
 
 type StudentFormValues = z.infer<typeof studentSchema>;
@@ -59,6 +56,66 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const params = useParams();
+  
+  // Use URL params if props are not provided
+  const actualBuildingId = buildingId || params.buildingId;
+  const actualBlockId = blockId || params.blockId;
+  const actualFloorId = floorId || params.floorId;
+  const actualRoomId = roomId || params.roomId;
+  const actualStudentId = studentId || params.studentId;
+  
+  // Fetch building, block, and room data
+  const { data: building } = useQuery({
+    queryKey: ['building', actualBuildingId],
+    queryFn: async () => {
+      if (!actualBuildingId) return null;
+      
+      const { data, error } = await supabase
+        .from('buildings')
+        .select('*')
+        .eq('id', actualBuildingId)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!actualBuildingId,
+  });
+  
+  const { data: block } = useQuery({
+    queryKey: ['block', actualBlockId],
+    queryFn: async () => {
+      if (!actualBlockId) return null;
+      
+      const { data, error } = await supabase
+        .from('blocks')
+        .select('*')
+        .eq('id', actualBlockId)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!actualBlockId,
+  });
+  
+  const { data: room } = useQuery({
+    queryKey: ['room', actualRoomId],
+    queryFn: async () => {
+      if (!actualRoomId) return null;
+      
+      const { data, error } = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('id', actualRoomId)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!actualRoomId,
+  });
   
   // Initialize form with default values
   const form = useForm<StudentFormValues>({
@@ -68,23 +125,19 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
       registrationNo: '',
       phoneNumber: '',
       parentPhoneNumber: '',
-      buildingName: buildingId || '',
-      blockName: blockId || '',
-      floorNumber: floorId ? parseInt(floorId) : 1,
-      roomNumber: roomId || '',
     },
   });
 
   // Fetch student data if editing
   useEffect(() => {
-    if (studentId) {
+    if (actualStudentId) {
       const fetchStudent = async () => {
         setIsLoading(true);
         try {
           const { data, error } = await supabase
             .from('students')
             .select('*')
-            .eq('id', studentId)
+            .eq('id', actualStudentId)
             .single();
           
           if (error) {
@@ -98,10 +151,6 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
               registrationNo: data.registration_no,
               phoneNumber: data.phone_number,
               parentPhoneNumber: data.parent_phone_number || '',
-              buildingName: data.building_name || '',
-              blockName: data.block_name || '',
-              floorNumber: data.floor_number || 1,
-              roomNumber: data.room_number || '',
             });
             
             if (data.photo_url) {
@@ -122,7 +171,7 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
       
       fetchStudent();
     }
-  }, [studentId, form, toast]);
+  }, [actualStudentId, form, toast]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -141,7 +190,7 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
     setIsSubmitting(true);
 
     // Simple validation for photo
-    if (!photoPreview && !studentId) {
+    if (!photoPreview && !actualStudentId) {
       toast({
         title: "Validation Error",
         description: "Student photo is required",
@@ -173,24 +222,28 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
         photoUrl = urlData.publicUrl;
       }
       
+      // Prepare floor number as a number, not string
+      const floorNum = actualFloorId ? parseInt(actualFloorId) : 1;
+      
       const studentData = {
         name: data.name,
         registration_no: data.registrationNo,
         phone_number: data.phoneNumber,
         parent_phone_number: data.parentPhoneNumber,
-        building_name: data.buildingName,
-        block_name: data.blockName,
-        floor_number: data.floorNumber,
-        room_number: data.roomNumber,
+        building_name: building?.name || '',
+        block_name: block?.name || '',
+        floor_number: floorNum,
+        room_number: room?.name || '',
+        room_id: actualRoomId || null,
         photo_url: photoUrl,
       };
       
-      if (studentId) {
+      if (actualStudentId) {
         // Update existing student
         const { error } = await supabase
           .from('students')
           .update(studentData)
-          .eq('id', studentId);
+          .eq('id', actualStudentId);
           
         if (error) throw error;
         
@@ -310,68 +363,7 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="buildingName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Building Name</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="e.g. Sahyadri" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="blockName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Block Name</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="e.g. Block A" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="floorNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Floor Number</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="number" 
-                      {...field} 
-                      onChange={(e) => field.onChange(Number(e.target.value))} 
-                      placeholder="e.g. 1" 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="roomNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Room Number</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder="e.g. 101" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-2">
               <Label>Student Photo</Label>
               {photoPreview ? (
                 <div className="relative h-32 w-32 rounded-md overflow-hidden border">

@@ -16,6 +16,30 @@ const NotFound = () => {
   }, [location.pathname]);
 
   const handleGoBack = () => {
+    // Extract path parts to navigate back to a valid page
+    const pathParts = location.pathname.split('/');
+    
+    // Handle room edit routes
+    if (location.pathname.includes('/rooms') && location.pathname.includes('/edit')) {
+      const buildingIndex = pathParts.indexOf('buildings');
+      if (buildingIndex !== -1 && pathParts.length > buildingIndex + 1) {
+        const buildingId = pathParts[buildingIndex + 1];
+        const blockIndex = pathParts.indexOf('blocks');
+        
+        if (blockIndex !== -1 && pathParts.length > blockIndex + 1) {
+          const blockId = pathParts[blockIndex + 1];
+          const floorIndex = pathParts.indexOf('floors');
+          
+          if (floorIndex !== -1 && pathParts.length > floorIndex + 1) {
+            const floorId = pathParts[floorIndex + 1];
+            // Navigate back to the rooms list
+            navigate(`/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms`);
+            return;
+          }
+        }
+      }
+    }
+    
     // If the URL contains student-related paths, handle them specially
     if (location.pathname.includes('student')) {
       // Extract building, block, floor, and room IDs from the URL to navigate back safely
