@@ -92,8 +92,22 @@ const StudentForm = ({ isEditing = false, studentId, buildingId, blockId, floorI
           }
           
           if (data) {
-            // Correctly cast the data to our Student type
-            const student = data as Student;
+            // Here's where the type error was occurring
+            // We need to check if we have the new fields and provide default values if not
+            const student: Student = {
+              id: data.id,
+              name: data.name,
+              registration_no: data.registration_no,
+              phone_number: data.phone_number,
+              parent_phone_number: data.parent_phone_number || '',
+              building_name: data.building_name || '',
+              block_name: data.block_name || '',
+              floor_number: data.floor_number || 1,
+              room_number: data.room_number || '',
+              photo_url: data.photo_url,
+              created_at: data.created_at,
+              updated_at: data.updated_at,
+            };
             
             form.reset({
               name: student.name,
