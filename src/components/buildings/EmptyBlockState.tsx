@@ -1,7 +1,17 @@
 
 import { Layers } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useNavigate, useParams } from 'react-router-dom';
+import { PlusCircle } from 'lucide-react';
 
-const EmptyBlockState = () => {
+interface EmptyBlockStateProps {
+  onAddBlock?: () => void;
+}
+
+const EmptyBlockState = ({ onAddBlock }: EmptyBlockStateProps) => {
+  const { buildingId } = useParams();
+  const navigate = useNavigate();
+  
   return (
     <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200 text-center">
       <div className="flex justify-center mb-4">
@@ -13,6 +23,16 @@ const EmptyBlockState = () => {
       <p className="text-gray-500 mb-4">
         This building doesn't have any blocks yet.
       </p>
+      
+      {onAddBlock && (
+        <Button 
+          onClick={onAddBlock}
+          className="mt-2"
+        >
+          <PlusCircle className="h-4 w-4 mr-2" />
+          Add New Block
+        </Button>
+      )}
     </div>
   );
 };
