@@ -16,14 +16,17 @@ interface FloorProps {
 const FloorList = () => {
   const { buildingId, blockId } = useParams();
   const [floors, setFloors] = useState<FloorProps[]>([
-    { id: '1', name: '1st Floor', roomCount: 8 },
-    { id: '2', name: '2nd Floor', roomCount: 8 },
-    { id: '3', name: '3rd Floor', roomCount: 8 },
-    { id: '4', name: '4th Floor', roomCount: 8 },
+    { id: '1', name: '1st Floor', roomCount: 10 },
+    { id: '2', name: '2nd Floor', roomCount: 10 },
+    { id: '3', name: '3rd Floor', roomCount: 10 },
+    { id: '4', name: '4th Floor', roomCount: 10 },
   ]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [floorToDelete, setFloorToDelete] = useState<FloorProps | null>(null);
   const [password, setPassword] = useState('');
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editFloorId, setEditFloorId] = useState<string | null>(null);
+  const [editRoomCount, setEditRoomCount] = useState<number>(0);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -58,6 +61,31 @@ const FloorList = () => {
       setIsDeleteDialogOpen(false);
       setFloorToDelete(null);
       setPassword('');
+    }
+  };
+
+  const handleEditRoomCount = (floor: FloorProps) => {
+    setEditFloorId(floor.id);
+    setEditRoomCount(floor.roomCount);
+    setIsEditMode(true);
+  };
+
+  const saveRoomCount = () => {
+    if (editFloorId) {
+      const updatedFloors = floors.map(floor => 
+        floor.id === editFloorId 
+          ? { ...floor, roomCount: editRoomCount } 
+          : floor
+      );
+      setFloors(updatedFloors);
+      
+      toast({
+        title: "Room Count Updated",
+        description: `Room count has been updated to ${editRoomCount}.`,
+      });
+      
+      setIsEditMode(false);
+      setEditFloorId(null);
     }
   };
 
@@ -97,7 +125,30 @@ const FloorList = () => {
                 </div>
                 <div>
                   <h3 className="font-medium">{floor.name}</h3>
-                  <p className="text-sm text-gray-500">{floor.roomCount} Rooms</p>
+                  <div className="flex items-center">
+                    {editFloorId === floor.id ? (
+                      <div className="flex items-center space-x-2">
+                        <Input 
+                          type="number" 
+                          value={editRoomCount}
+                          onChange={(e) => setEditRoomCount(parseInt(e.target.value) || 0)}
+                          className="w-16 h-7 p-1 text-sm" 
+                        />
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          onClick={saveRoomCount}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 cursor-pointer hover:underline" onClick={() => handleEditRoomCount(floor)}>
+                        {floor.roomCount} Rooms
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
               
