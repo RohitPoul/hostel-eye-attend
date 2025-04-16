@@ -38,7 +38,7 @@ const BlockList = () => {
   });
 
   // Fetch blocks for the current building
-  const { data: blocks = [], isLoading } = useQuery({
+  const { data: blocksData = [], isLoading } = useQuery({
     queryKey: ['blocks', buildingId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -47,14 +47,34 @@ const BlockList = () => {
         .eq('building_id', buildingId);
       
       if (error) throw error;
-      
-      // In a real app, we would fetch floor count for each block
-      // For now, we'll hardcode it to 4 for all blocks
-      return data.map(block => ({
-        ...block,
-        floorCount: 4
-      }));
+      return data;
     },
+  });
+
+  // Fetch floor counts for each block
+  const { data: blocks = [] } = useQuery({
+    queryKey: ['blocks-with-floors', buildingId],
+    queryFn: async () => {
+      if (!blocksData.length) return [];
+      
+      // Get floor counts for each block
+      const blocksWithFloors = await Promise.all(
+        blocksData.map(async (block) => {
+          const { count, error } = await supabase
+            .from('floors')
+            .select('id', { count: 'exact', head: true })
+            .eq('block_id', block.id);
+          
+          return {
+            ...block,
+            floorCount: count || 0
+          };
+        })
+      );
+      
+      return blocksWithFloors;
+    },
+    enabled: blocksData.length > 0,
   });
 
   // Delete block mutation
@@ -69,6 +89,7 @@ const BlockList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['blocks', buildingId] });
+      queryClient.invalidateQueries({ queryKey: ['blocks-with-floors', buildingId] });
       toast({
         title: "Block Deleted",
         description: `${blockToDelete?.name} has been removed successfully.`,
