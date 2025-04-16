@@ -2,7 +2,7 @@
 import { Button } from '@/components/ui/button';
 import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { BuildingData, BlockData, getFloorName } from '@/utils/roomUtils';
+import { BuildingData, BlockData, formatFloorNumber } from '@/utils/roomUtils';
 
 interface RoomBreadcrumbProps {
   buildingId?: string;
@@ -10,6 +10,7 @@ interface RoomBreadcrumbProps {
   floorId?: string;
   building?: BuildingData | null;
   block?: BlockData | null;
+  floorNumber?: number | null;
 }
 
 const RoomBreadcrumb = ({ 
@@ -17,7 +18,8 @@ const RoomBreadcrumb = ({
   blockId, 
   floorId, 
   building, 
-  block 
+  block,
+  floorNumber
 }: RoomBreadcrumbProps) => {
   const navigate = useNavigate();
 
@@ -42,7 +44,7 @@ const RoomBreadcrumb = ({
         </div>
       )}
       <div className="px-3 py-1 bg-green-100 rounded-full text-green-600 text-sm font-medium">
-        {getFloorName(floorId)}
+        {formatFloorNumber(floorNumber)}
       </div>
     </div>
   );

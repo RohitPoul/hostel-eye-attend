@@ -80,7 +80,7 @@ export const fetchFloor = async (blockId: string | undefined, floorId: string | 
     .from('floors')
     .select('id, block_id, floor_number')
     .eq('block_id', blockId)
-    .eq('floor_number', parseInt(floorId))
+    .eq('id', floorId)
     .single();
   
   if (error) {
@@ -95,36 +95,55 @@ export const fetchFloor = async (blockId: string | undefined, floorId: string | 
 export const fetchRooms = async (blockId: string | undefined, floorId: string | undefined): Promise<RoomProps[]> => {
   if (!blockId || !floorId) return [];
   
-  const { data, error } = await supabase
-    .from('rooms')
-    .select('*')
-    .eq('block_id', blockId)
-    .eq('floor_id', parseInt(floorId));
-  
-  if (error) {
-    console.error('Error fetching rooms:', error);
-    throw error;
+  try {
+    // First get the floor information to get the floor_number
+    const floor = await fetchFloor(blockId, floorId);
+    if (!floor) return [];
+    
+    const { data, error } = await supabase
+      .from('rooms')
+      .select('*')
+      .eq('block_id', blockId)
+      .eq('floor_id', floor.floor_number);
+    
+    if (error) {
+      console.error('Error fetching rooms:', error);
+      throw error;
+    }
+    
+    console.log('Rooms fetched:', data);
+    return data as RoomProps[];
+  } catch (error) {
+    console.error('Error in fetchRooms:', error);
+    return [];
   }
-  
-  return data as RoomProps[];
 };
 
 // Fetch students for a specific block and floor
 export const fetchStudents = async (blockId: string | undefined, floorId: string | undefined, blockName: string | undefined) => {
   if (!blockId || !floorId) return [];
   
-  const { data, error } = await supabase
-    .from('students')
-    .select('*')
-    .eq('block_name', blockName || '')
-    .eq('floor_number', parseInt(floorId));
-  
-  if (error) {
-    console.error('Error fetching students:', error);
+  try {
+    // First get the floor information to get the floor_number
+    const floor = await fetchFloor(blockId, floorId);
+    if (!floor) return [];
+    
+    const { data, error } = await supabase
+      .from('students')
+      .select('*')
+      .eq('block_name', blockName || '')
+      .eq('floor_number', floor.floor_number);
+    
+    if (error) {
+      console.error('Error fetching students:', error);
+      return [];
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error in fetchStudents:', error);
     return [];
   }
-  
-  return data;
 };
 
 // Delete room function
@@ -139,10 +158,21 @@ export const deleteRoomById = async (roomId: string) => {
 };
 
 // Format floor name helper
-export const getFloorName = (floorNumber: string | undefined) => {
-  if (!floorNumber) return '';
+export const getFloorName = (floorId: string | undefined) => {
+  if (!floorId) return '';
   
-  const num = parseInt(floorNumber);
+  // This function now expects the floor ID, not the floor number
+  // We'll need to extract the floor number from the database
+  return "Floor"; // Default fallback
+};
+
+// New helper function to get floor number and format it
+export const formatFloorNumber = (floorNumber: number | undefined | null) => {
+  if (floorNumber === undefined || floorNumber === null) return '';
+  
+  const num = parseInt(floorNumber.toString());
+  if (isNaN(num)) return ''; // Return empty string if not a valid number
+  
   const suffix = num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th';
   return `${num}${suffix} Floor`;
 };

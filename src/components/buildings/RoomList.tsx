@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -41,19 +41,27 @@ const RoomList = () => {
   const { data: floor } = useQuery({
     queryKey: ['floor', blockId, floorId],
     queryFn: () => fetchFloor(blockId, floorId),
+    enabled: !!blockId && !!floorId,
   });
 
   // Fetch rooms for the current floor
   const { data: rooms = [], isLoading: isLoadingRooms } = useQuery({
-    queryKey: ['rooms', blockId, floorId],
+    queryKey: ['rooms', blockId, floorId, floor?.floor_number],
     queryFn: () => fetchRooms(blockId, floorId),
+    enabled: !!blockId && !!floorId && !!floor,
   });
+
+  // Log for debugging
+  useEffect(() => {
+    console.log('Floor data:', floor);
+    console.log('Rooms data:', rooms);
+  }, [floor, rooms]);
 
   // Fetch students for each room
   const { data: students = [] } = useQuery({
-    queryKey: ['students', blockId, floorId],
+    queryKey: ['students', blockId, floorId, block?.name, floor?.floor_number],
     queryFn: () => fetchStudents(blockId, floorId, block?.name),
-    enabled: !!block,
+    enabled: !!block && !!floor,
   });
 
   // Organize students by room
@@ -125,6 +133,7 @@ const RoomList = () => {
         floorId={floorId}
         building={building}
         block={block}
+        floorNumber={floor?.floor_number}
       />
 
       <div className="flex justify-between items-center">
