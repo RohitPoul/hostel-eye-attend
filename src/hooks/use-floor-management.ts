@@ -19,7 +19,7 @@ export const useFloorManagement = () => {
   const [floorToDelete, setFloorToDelete] = useState<FloorProps | null>(null);
   const [password, setPassword] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
-  const [editFloorId, setEditFloorId] = useState<string | null>(null);
+  const [editFloorId, setEditFloorId] = useState<string | null>(null); // Ensures this is a string or null
   const [editRoomCount, setEditRoomCount] = useState<number>(0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -160,7 +160,7 @@ export const useFloorManagement = () => {
   };
 
   const handleEditRoomCount = (floor: FloorProps) => {
-    setEditFloorId(floor.id);
+    setEditFloorId(floor.id); // Set as string
     setEditRoomCount(floor.roomCount);
     setIsEditMode(true);
   };
@@ -266,7 +266,7 @@ export const useFloorManagement = () => {
     password,
     setPassword,
     isEditMode,
-    editFloorId,
+    editFloorId, // Return as string | null
     editRoomCount,
     setEditRoomCount,
     handleDeleteClick,

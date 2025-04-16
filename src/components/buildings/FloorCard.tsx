@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layers, Trash2, ChevronRight } from 'lucide-react';
@@ -13,6 +12,7 @@ interface FloorCardProps {
   blockId?: string;
   isEditMode: boolean;
   editRoomCount: number;
+  editFloorId: string | null;
   onDelete: () => void;
   onEditRoomCount: () => void;
   onSaveRoomCount: () => void;
@@ -28,6 +28,7 @@ const FloorCard = ({
   blockId,
   isEditMode,
   editRoomCount,
+  editFloorId,
   onDelete,
   onEditRoomCount,
   onSaveRoomCount,
@@ -46,7 +47,7 @@ const FloorCard = ({
           <div>
             <h3 className="font-medium">{name}</h3>
             <div className="flex items-center">
-              {isEditMode && id === editRoomCount ? (
+              {isEditMode && id === editFloorId ? (
                 <div className="flex items-center space-x-2">
                   <Input 
                     type="number" 

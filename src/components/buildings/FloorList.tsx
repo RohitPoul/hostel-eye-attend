@@ -75,6 +75,7 @@ const FloorList = () => {
               onSaveRoomCount={saveRoomCount}
               onEditRoomCountChange={(count) => setEditRoomCount(count)}
               isPending={updateRoomCountMutation.isPending}
+              editFloorId={editFloorId}
             />
           ))}
         </div>
