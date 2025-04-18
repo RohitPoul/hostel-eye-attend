@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { formatFloorNumber } from '@/utils/formatUtils';
 import { cn } from '@/lib/utils';
+import { useCalendarFilters } from '@/hooks/use-calendar-filters';
 
 interface CalendarHeaderProps {
   viewMode: 'daily' | 'weekly' | 'monthly';

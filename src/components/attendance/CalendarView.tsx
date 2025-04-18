@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { markAttendance, markDayAsHoliday } from '@/utils/roomUtils';
+import { markAttendance, markDayAsHoliday } from '@/utils/attendanceUtils';
 import { StudentProps } from '@/types/room';
 import { useCalendarState } from '@/hooks/use-calendar-state';
 import { useCalendarFilters } from '@/hooks/use-calendar-filters';
@@ -12,6 +12,20 @@ import { CalendarGrid } from './calendar/CalendarGrid';
 import { AttendanceDialog } from './calendar/AttendanceDialog';
 import { HolidayDialog } from './calendar/HolidayDialog';
 import { LeaveDialog } from './calendar/LeaveDialog';
+import { fetchBlock, fetchFloor } from '@/utils/buildingUtils';
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const statusColors = {
+  'P': 'bg-green-100 text-green-800',
+  'A': 'bg-red-100 text-red-800',
+  'L': 'bg-yellow-100 text-yellow-800',
+  'H': 'bg-blue-100 text-blue-800',
+  '-': 'bg-gray-100 text-gray-500'
+};
 
 const statusLabels = {
   'P': 'Present',
@@ -148,7 +162,7 @@ const CalendarView = () => {
         
         Object.entries(statusCounts).forEach(([status, count]) => {
           if (count > maxCount) {
-            maxCount = count;
+            maxCount = count as number;
             maxStatus = status as "P" | "A" | "L" | "H";
           }
         });
