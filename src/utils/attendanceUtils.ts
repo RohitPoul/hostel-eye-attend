@@ -27,7 +27,11 @@ export const fetchAttendance = async (dateStr: string | null = null, buildingId?
       return [];
     }
     
-    return data as AttendanceRecord[];
+    // Ensure status is a valid type before returning
+    return data.map(record => ({
+      ...record,
+      status: record.status as "P" | "A" | "L" | "H" | string
+    })) as AttendanceRecord[];
   } catch (error) {
     console.error('Error in fetchAttendance:', error);
     return [];

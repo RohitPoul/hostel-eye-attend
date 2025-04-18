@@ -37,7 +37,7 @@ export interface FloorData {
 export interface AttendanceRecord {
   id: string;
   student_id: string | null;
-  status: string;
+  status: "P" | "A" | "L" | "H" | string; // Modified to accept string as well
   date: string;
   room_id?: string | null;
   created_at: string | null;
