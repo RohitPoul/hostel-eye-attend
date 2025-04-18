@@ -46,13 +46,16 @@ export const useFloorManagement = () => {
         const updatedFloors = await Promise.all(
           floorData.map(async (floor) => {
             // Fetch rooms for this floor to get the count
-            const rooms = await fetchRooms(blockId, floor.floor_number.toString());
-            const floorName = getFloorName(floor.floor_number.toString());
+            // Fix: Convert floor_number to string before passing it to fetchRooms
+            const rooms = await fetchRooms(blockId, floor.id);
+            // Here we're using the floor's actual floor_number property for the name
+            const floorName = getFloorName(floor.floor_number);
             
             return {
               id: floor.id,
               name: floorName,
-              roomCount: rooms.length
+              roomCount: rooms.length,
+              floor_number: floor.floor_number
             };
           })
         );

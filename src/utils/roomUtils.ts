@@ -96,15 +96,23 @@ export const fetchRooms = async (blockId: string | undefined, floorId: string | 
   if (!blockId || !floorId) return [];
   
   try {
-    // First get the floor information to get the floor_number
-    const floor = await fetchFloor(blockId, floorId);
-    if (!floor) return [];
+    // First get the floor information
+    const { data: floorData, error: floorError } = await supabase
+      .from('floors')
+      .select('*')
+      .eq('id', floorId)
+      .single();
+    
+    if (floorError || !floorData) {
+      console.error('Error fetching floor data:', floorError);
+      return [];
+    }
     
     const { data, error } = await supabase
       .from('rooms')
       .select('*')
       .eq('block_id', blockId)
-      .eq('floor_id', floor.floor_number);
+      .eq('floor_id', floorData.floor_number);
     
     if (error) {
       console.error('Error fetching rooms:', error);
