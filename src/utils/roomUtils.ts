@@ -36,6 +36,16 @@ export interface FloorData {
   floor_number: number;
 }
 
+export interface AttendanceRecord {
+  id: string;
+  student_id: string;
+  status: 'P' | 'A' | 'L' | 'H';
+  date: string;
+  room_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // Fetch building data
 export const fetchBuilding = async (buildingId: string | undefined): Promise<BuildingData | null> => {
   if (!buildingId) return null;
@@ -154,6 +164,42 @@ export const fetchStudents = async (blockId: string | undefined, floorId: string
   }
 };
 
+// Fetch attendance for a specific date or date range
+export const fetchAttendance = async (dateStr: string | null = null, buildingId?: string, blockId?: string, floorId?: string, roomId?: string, studentId?: string) => {
+  try {
+    let query = supabase
+      .from('attendance')
+      .select('*');
+    
+    // Add date filter if provided
+    if (dateStr) {
+      query = query.eq('date', dateStr);
+    }
+    
+    // Add room filter if provided
+    if (roomId) {
+      query = query.eq('room_id', roomId);
+    }
+    
+    // Add student filter if provided
+    if (studentId) {
+      query = query.eq('student_id', studentId);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('Error fetching attendance:', error);
+      return [];
+    }
+    
+    return data as AttendanceRecord[];
+  } catch (error) {
+    console.error('Error in fetchAttendance:', error);
+    return [];
+  }
+};
+
 // Delete room function
 export const deleteRoomById = async (roomId: string) => {
   const { error } = await supabase
@@ -183,4 +229,114 @@ export const formatFloorNumber = (floorNumber: number | undefined | null) => {
   
   const suffix = num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th';
   return `${num}${suffix} Floor`;
+};
+
+// Mark attendance for a specific student
+export const markAttendance = async (studentId: string, status: 'P' | 'A' | 'L' | 'H', date: string, roomId?: string) => {
+  try {
+    // Check if there's already an attendance record for this student on this date
+    const { data: existingRecord, error: fetchError } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('student_id', studentId)
+      .eq('date', date)
+      .maybeSingle();
+    
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error('Error checking existing attendance:', fetchError);
+      throw fetchError;
+    }
+    
+    if (existingRecord) {
+      // Update existing record
+      const { data, error } = await supabase
+        .from('attendance')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', existingRecord.id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error updating attendance:', error);
+        throw error;
+      }
+      
+      return data;
+    } else {
+      // Create new record
+      const { data, error } = await supabase
+        .from('attendance')
+        .insert([{ 
+          student_id: studentId, 
+          status, 
+          date, 
+          room_id: roomId 
+        }])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error inserting attendance:', error);
+        throw error;
+      }
+      
+      return data;
+    }
+  } catch (error) {
+    console.error('Error in markAttendance:', error);
+    throw error;
+  }
+};
+
+// Mark day as holiday
+export const markDayAsHoliday = async (date: string) => {
+  try {
+    // For holidays, we create a special record with null student_id
+    const { data, error } = await supabase
+      .from('attendance')
+      .insert([{ 
+        student_id: null, 
+        status: 'H', 
+        date
+      }])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error marking holiday:', error);
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error in markDayAsHoliday:', error);
+    throw error;
+  }
+};
+
+// Get attendance status for a specific date
+export const getDateAttendanceStatus = async (date: string): Promise<'P' | 'A' | 'L' | 'H' | null> => {
+  try {
+    // First check if it's a holiday
+    const { data: holidayData, error: holidayError } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('date', date)
+      .eq('status', 'H')
+      .maybeSingle();
+    
+    if (holidayError && holidayError.code !== 'PGRST116') {
+      console.error('Error checking holiday:', holidayError);
+    }
+    
+    if (holidayData) {
+      return 'H';
+    }
+    
+    // Not a holiday, default to null
+    return null;
+  } catch (error) {
+    console.error('Error in getDateAttendanceStatus:', error);
+    return null;
+  }
 };

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter, User, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -9,6 +10,21 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { 
+  fetchBuilding, 
+  fetchBlock, 
+  fetchFloor, 
+  fetchStudents, 
+  markAttendance, 
+  markDayAsHoliday,
+  fetchAttendance,
+  getDateAttendanceStatus,
+  AttendanceRecord,
+  StudentProps,
+  formatFloorNumber
+} from '@/utils/roomUtils';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
@@ -17,38 +33,6 @@ const MONTHS = [
 ];
 
 type AttendanceStatus = 'P' | 'A' | 'L' | 'H';
-
-interface AttendanceRecord {
-  status: AttendanceStatus;
-  studentId?: string;
-  studentName?: string;
-}
-
-interface Student {
-  id: string;
-  name: string;
-  registrationNo: string;
-}
-
-const dummyStudents: Student[] = [
-  { id: 's1', name: 'John Doe', registrationNo: 'REG2023001' },
-  { id: 's2', name: 'Jane Smith', registrationNo: 'REG2023002' },
-  { id: 's3', name: 'Alex Johnson', registrationNo: 'REG2023003' },
-  { id: 's4', name: 'Emily Davis', registrationNo: 'REG2023004' },
-];
-
-const dummyAttendanceData: Record<string, AttendanceRecord> = {
-  '2025-04-01': { status: 'P' },
-  '2025-04-02': { status: 'P' },
-  '2025-04-03': { status: 'A' },
-  '2025-04-04': { status: 'P' },
-  '2025-04-05': { status: 'L' },
-  '2025-04-06': { status: 'L' },
-  '2025-04-07': { status: 'P' },
-  '2025-04-08': { status: 'P' },
-  '2025-04-09': { status: 'H' },
-  '2025-04-10': { status: 'P' },
-};
 
 const statusColors = {
   'P': 'bg-green-100 text-green-800',
@@ -74,13 +58,227 @@ const CalendarView = () => {
   const [filterBlock, setFilterBlock] = useState<string | null>(null);
   const [filterFloor, setFilterFloor] = useState<string | null>(null);
   const [filterRoom, setFilterRoom] = useState<string | null>(null);
-  const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceRecord>>(dummyAttendanceData);
+  const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceStatus>>({});
   
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [isStudentListOpen, setIsStudentListOpen] = useState(false);
   const [isHolidayDialogOpen, setIsHolidayDialogOpen] = useState(false);
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<StudentProps | null>(null);
+
+  // Fetch buildings for filters
+  const { data: buildings } = useQuery({
+    queryKey: ['buildings'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('buildings')
+        .select('id, name');
+        
+      if (error) throw error;
+      return data || [];
+    }
+  });
+  
+  // Fetch blocks for filters
+  const { data: blocks } = useQuery({
+    queryKey: ['blocks', filterBuilding],
+    queryFn: async () => {
+      if (!filterBuilding) return [];
+      
+      const { data, error } = await supabase
+        .from('blocks')
+        .select('id, name, building_id')
+        .eq('building_id', filterBuilding);
+        
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!filterBuilding && filterBuilding !== 'all-buildings'
+  });
+  
+  // Fetch floors for filters
+  const { data: floors } = useQuery({
+    queryKey: ['floors', filterBlock],
+    queryFn: async () => {
+      if (!filterBlock) return [];
+      
+      const { data, error } = await supabase
+        .from('floors')
+        .select('id, block_id, floor_number')
+        .eq('block_id', filterBlock);
+        
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!filterBlock && filterBlock !== 'all-blocks'
+  });
+  
+  // Fetch rooms for filters
+  const { data: rooms } = useQuery({
+    queryKey: ['rooms', filterBlock, filterFloor],
+    queryFn: async () => {
+      if (!filterBlock || !filterFloor) return [];
+      
+      const { data: floorData } = await supabase
+        .from('floors')
+        .select('floor_number')
+        .eq('id', filterFloor)
+        .single();
+        
+      if (!floorData) return [];
+      
+      const { data, error } = await supabase
+        .from('rooms')
+        .select('id, name, block_id, floor_id')
+        .eq('block_id', filterBlock)
+        .eq('floor_id', floorData.floor_number);
+        
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!filterBlock && !!filterFloor && filterBlock !== 'all-blocks' && filterFloor !== 'all-floors'
+  });
+  
+  // Fetch students
+  const { data: students, refetch: refetchStudents } = useQuery({
+    queryKey: ['students', filterBuilding, filterBlock, filterFloor, filterRoom],
+    queryFn: async () => {
+      let query = supabase.from('students').select('*');
+      
+      if (filterBlock && filterBlock !== 'all-blocks') {
+        const blockData = await fetchBlock(filterBlock);
+        if (blockData) {
+          query = query.eq('block_name', blockData.name);
+        }
+      }
+      
+      if (filterFloor && filterFloor !== 'all-floors') {
+        const floorData = await fetchFloor(filterBlock || '', filterFloor);
+        if (floorData) {
+          query = query.eq('floor_number', floorData.floor_number);
+        }
+      }
+      
+      if (filterRoom && filterRoom !== 'all-rooms') {
+        query = query.eq('room_id', filterRoom);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      return data || [];
+    }
+  });
+  
+  // Fetch attendance data for the selected month
+  const { data: monthAttendance, refetch: refetchAttendance } = useQuery({
+    queryKey: ['attendance', selectedYear, selectedMonth, filterBuilding, filterBlock, filterFloor, filterRoom],
+    queryFn: async () => {
+      // Create date range for the month
+      const startDate = new Date(selectedYear, selectedMonth, 1);
+      const endDate = new Date(selectedYear, selectedMonth + 1, 0);
+      
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+      
+      let query = supabase
+        .from('attendance')
+        .select('*')
+        .gte('date', startDateStr)
+        .lte('date', endDateStr);
+      
+      if (filterRoom && filterRoom !== 'all-rooms') {
+        query = query.eq('room_id', filterRoom);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Error fetching attendance:', error);
+        return [];
+      }
+      
+      return data || [];
+    }
+  });
+  
+  // Process attendance data for the calendar
+  useEffect(() => {
+    if (monthAttendance) {
+      const newAttendanceData: Record<string, AttendanceStatus> = {};
+      
+      // Process holidays (records with null student_id)
+      const holidays = monthAttendance.filter(record => record.student_id === null && record.status === 'H');
+      
+      holidays.forEach(holiday => {
+        newAttendanceData[holiday.date] = 'H';
+      });
+      
+      // Process student attendance
+      const studentAttendance = monthAttendance.filter(record => record.student_id !== null);
+      
+      // Group by date
+      const attendanceByDate = studentAttendance.reduce((acc, record) => {
+        if (!acc[record.date]) {
+          acc[record.date] = [];
+        }
+        acc[record.date].push(record);
+        return acc;
+      }, {} as Record<string, AttendanceRecord[]>);
+      
+      // Determine status for each date
+      Object.entries(attendanceByDate).forEach(([date, records]) => {
+        if (newAttendanceData[date] === 'H') {
+          // Already marked as holiday, skip
+          return;
+        }
+        
+        // Count statuses
+        const statusCounts = records.reduce((acc, record) => {
+          acc[record.status] = (acc[record.status] || 0) + 1;
+          return acc;
+        }, {} as Record<AttendanceStatus, number>);
+        
+        // Determine most common status
+        let maxCount = 0;
+        let maxStatus: AttendanceStatus = 'P';
+        
+        Object.entries(statusCounts).forEach(([status, count]) => {
+          if (count > maxCount) {
+            maxCount = count;
+            maxStatus = status as AttendanceStatus;
+          }
+        });
+        
+        newAttendanceData[date] = maxStatus;
+      });
+      
+      setAttendanceData(newAttendanceData);
+    }
+  }, [monthAttendance]);
+  
+  // Set up real-time listener for attendance changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('attendance-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'attendance'
+        },
+        () => {
+          // Refetch attendance data when changes occur
+          refetchAttendance();
+        }
+      )
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetchAttendance]);
 
   const getDaysInMonth = (year: number, month: number) => {
     return new Date(year, month + 1, 0).getDate();
@@ -132,7 +330,7 @@ const CalendarView = () => {
 
   const getAttendanceForDay = (day: number) => {
     const dateString = formatDateString(day);
-    return attendanceData[dateString] || { status: '-' as AttendanceStatus | '-' };
+    return attendanceData[dateString] || '-' as AttendanceStatus | '-';
   };
 
   const getStatusClass = (status: AttendanceStatus | '-') => {
@@ -145,49 +343,119 @@ const CalendarView = () => {
     setIsStudentListOpen(true);
   };
 
-  const markAsHoliday = () => {
+  const markAsHoliday = async () => {
     if (selectedDay) {
       const dateString = formatDateString(selectedDay);
-      const updatedAttendanceData = { ...attendanceData };
       
-      updatedAttendanceData[dateString] = { status: 'H' };
-      
-      setAttendanceData(updatedAttendanceData);
-      setIsHolidayDialogOpen(false);
-      
-      toast({
-        title: "Holiday Marked",
-        description: `${MONTHS[selectedMonth]} ${selectedDay}, ${selectedYear} has been marked as a holiday.`,
-      });
+      try {
+        await markDayAsHoliday(dateString);
+        
+        setIsHolidayDialogOpen(false);
+        
+        toast({
+          title: "Holiday Marked",
+          description: `${MONTHS[selectedMonth]} ${selectedDay}, ${selectedYear} has been marked as a holiday.`,
+        });
+        
+        // Refetch attendance data
+        refetchAttendance();
+      } catch (error) {
+        console.error('Error marking holiday:', error);
+        toast({
+          title: "Error",
+          description: "Failed to mark holiday. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
-  const markStudentLeave = () => {
+  const markStudentLeave = async () => {
     if (selectedDay && selectedStudent) {
       const dateString = formatDateString(selectedDay);
-      const updatedAttendanceData = { ...attendanceData };
       
-      updatedAttendanceData[dateString] = { 
-        status: 'L',
-        studentId: selectedStudent.id,
-        studentName: selectedStudent.name
-      };
-      
-      setAttendanceData(updatedAttendanceData);
-      setIsLeaveDialogOpen(false);
-      setSelectedStudent(null);
-      
-      toast({
-        title: "Leave Marked",
-        description: `${selectedStudent.name} has been marked on leave for ${MONTHS[selectedMonth]} ${selectedDay}, ${selectedYear}.`,
-      });
+      try {
+        await markAttendance(selectedStudent.id, 'L', dateString);
+        
+        setIsLeaveDialogOpen(false);
+        setSelectedStudent(null);
+        
+        toast({
+          title: "Leave Marked",
+          description: `${selectedStudent.name} has been marked on leave for ${MONTHS[selectedMonth]} ${selectedDay}, ${selectedYear}.`,
+        });
+        
+        // Refetch attendance data
+        refetchAttendance();
+      } catch (error) {
+        console.error('Error marking leave:', error);
+        toast({
+          title: "Error",
+          description: "Failed to mark leave. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
-  const handleStudentSelect = (student: Student) => {
+  const handleStudentSelect = (student: StudentProps) => {
     setSelectedStudent(student);
     setIsLeaveDialogOpen(true);
     setIsStudentListOpen(false);
+  };
+
+  const handleMarkAttendance = async (studentId: string, status: AttendanceStatus) => {
+    if (selectedDay) {
+      const dateString = formatDateString(selectedDay);
+      
+      try {
+        await markAttendance(studentId, status, dateString, filterRoom || undefined);
+        
+        toast({
+          title: "Attendance Marked",
+          description: `Student has been marked as ${statusLabels[status]}.`,
+        });
+        
+        // Refetch attendance data
+        refetchAttendance();
+      } catch (error) {
+        console.error('Error marking attendance:', error);
+        toast({
+          title: "Error",
+          description: "Failed to mark attendance. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  // Fetch student attendance for the selected day
+  const { data: selectedDayAttendance, refetch: refetchDayAttendance } = useQuery({
+    queryKey: ['day-attendance', selectedDay, selectedMonth, selectedYear],
+    queryFn: async () => {
+      if (!selectedDay) return [];
+      
+      const dateString = formatDateString(selectedDay);
+      
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('date', dateString);
+        
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: selectedDay !== null
+  });
+
+  // Get student attendance status
+  const getStudentAttendanceStatus = (studentId: string): AttendanceStatus | '-' => {
+    if (!selectedDay || !selectedDayAttendance) return '-';
+    
+    const dateString = formatDateString(selectedDay);
+    const record = selectedDayAttendance.find(r => r.student_id === studentId && r.date === dateString);
+    
+    return record ? record.status as AttendanceStatus : '-';
   };
 
   return (
@@ -229,8 +497,9 @@ const CalendarView = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all-buildings">All Buildings</SelectItem>
-                      <SelectItem value="1">Satyaadi</SelectItem>
-                      <SelectItem value="2">Ananya</SelectItem>
+                      {buildings?.map(building => (
+                        <SelectItem key={building.id} value={building.id}>{building.name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -243,10 +512,9 @@ const CalendarView = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all-blocks">All Blocks</SelectItem>
-                      <SelectItem value="A">Block A</SelectItem>
-                      <SelectItem value="B">Block B</SelectItem>
-                      <SelectItem value="C">Block C</SelectItem>
-                      <SelectItem value="D">Block D</SelectItem>
+                      {blocks?.map(block => (
+                        <SelectItem key={block.id} value={block.id}>{block.name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -259,10 +527,11 @@ const CalendarView = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all-floors">All Floors</SelectItem>
-                      <SelectItem value="1">1st Floor</SelectItem>
-                      <SelectItem value="2">2nd Floor</SelectItem>
-                      <SelectItem value="3">3rd Floor</SelectItem>
-                      <SelectItem value="4">4th Floor</SelectItem>
+                      {floors?.map(floor => (
+                        <SelectItem key={floor.id} value={floor.id}>
+                          {formatFloorNumber(floor.floor_number)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -275,10 +544,9 @@ const CalendarView = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all-rooms">All Rooms</SelectItem>
-                      <SelectItem value="NAF-01">NAF-01</SelectItem>
-                      <SelectItem value="NAF-02">NAF-02</SelectItem>
-                      <SelectItem value="NAF-03">NAF-03</SelectItem>
-                      <SelectItem value="NAF-04">NAF-04</SelectItem>
+                      {rooms?.map(room => (
+                        <SelectItem key={room.id} value={room.id}>{room.name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -312,7 +580,13 @@ const CalendarView = () => {
               <Calendar
                 mode="single"
                 selected={selectedDate}
-                onSelect={setSelectedDate}
+                onSelect={(date) => {
+                  if (date) {
+                    setSelectedDate(date);
+                    setSelectedMonth(date.getMonth());
+                    setSelectedYear(date.getFullYear());
+                  }
+                }}
                 initialFocus
                 className="pointer-events-auto"
               />
@@ -381,11 +655,11 @@ const CalendarView = () => {
                       {day}
                     </span>
                     
-                    {getAttendanceForDay(day).status !== '-' && (
+                    {getAttendanceForDay(day) !== '-' && (
                       <span className={`text-xs font-bold rounded-full px-2 py-1 ${
-                        getStatusClass(getAttendanceForDay(day).status)
+                        getStatusClass(getAttendanceForDay(day))
                       }`}>
-                        {getAttendanceForDay(day).status}
+                        {getAttendanceForDay(day)}
                       </span>
                     )}
                   </div>
@@ -434,30 +708,57 @@ const CalendarView = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {dummyStudents.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell className="font-medium">{student.name}</TableCell>
-                    <TableCell>{student.registrationNo}</TableCell>
-                    <TableCell>
-                      {selectedDay && (
-                        <Badge className={getStatusClass(getAttendanceForDay(selectedDay).status)}>
-                          {getAttendanceForDay(selectedDay).status !== '-' 
-                            ? statusLabels[getAttendanceForDay(selectedDay).status as AttendanceStatus] 
-                            : 'Not Marked'}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleStudentSelect(student)}
-                      >
-                        Mark Leave
-                      </Button>
+                {students?.length ? (
+                  students.map((student) => (
+                    <TableRow key={student.id}>
+                      <TableCell className="font-medium">{student.name}</TableCell>
+                      <TableCell>{student.registration_no}</TableCell>
+                      <TableCell>
+                        {selectedDay && (
+                          <Badge className={getStatusClass(getStudentAttendanceStatus(student.id))}>
+                            {getStudentAttendanceStatus(student.id) !== '-' 
+                              ? statusLabels[getStudentAttendanceStatus(student.id) as AttendanceStatus] 
+                              : 'Not Marked'}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-green-600"
+                            onClick={() => handleMarkAttendance(student.id, 'P')}
+                          >
+                            Present
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600"
+                            onClick={() => handleMarkAttendance(student.id, 'A')}
+                          >
+                            Absent
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-yellow-600"
+                            onClick={() => handleStudentSelect(student)}
+                          >
+                            Leave
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-4 text-gray-500">
+                      No students found. Try adjusting your filters.
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </div>
