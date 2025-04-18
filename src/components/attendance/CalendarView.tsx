@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter, User, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -66,7 +65,6 @@ const CalendarView = () => {
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<StudentProps | null>(null);
 
-  // Fetch buildings for filters
   const { data: buildings } = useQuery({
     queryKey: ['buildings'],
     queryFn: async () => {
@@ -79,7 +77,6 @@ const CalendarView = () => {
     }
   });
   
-  // Fetch blocks for filters
   const { data: blocks } = useQuery({
     queryKey: ['blocks', filterBuilding],
     queryFn: async () => {
@@ -96,7 +93,6 @@ const CalendarView = () => {
     enabled: !!filterBuilding && filterBuilding !== 'all-buildings'
   });
   
-  // Fetch floors for filters
   const { data: floors } = useQuery({
     queryKey: ['floors', filterBlock],
     queryFn: async () => {
@@ -113,7 +109,6 @@ const CalendarView = () => {
     enabled: !!filterBlock && filterBlock !== 'all-blocks'
   });
   
-  // Fetch rooms for filters
   const { data: rooms } = useQuery({
     queryKey: ['rooms', filterBlock, filterFloor],
     queryFn: async () => {
@@ -139,7 +134,6 @@ const CalendarView = () => {
     enabled: !!filterBlock && !!filterFloor && filterBlock !== 'all-blocks' && filterFloor !== 'all-floors'
   });
   
-  // Fetch students
   const { data: students, refetch: refetchStudents } = useQuery({
     queryKey: ['students', filterBuilding, filterBlock, filterFloor, filterRoom],
     queryFn: async () => {
@@ -170,11 +164,9 @@ const CalendarView = () => {
     }
   });
   
-  // Fetch attendance data for the selected month
   const { data: monthAttendance, refetch: refetchAttendance } = useQuery({
     queryKey: ['attendance', selectedYear, selectedMonth, filterBuilding, filterBlock, filterFloor, filterRoom],
     queryFn: async () => {
-      // Create date range for the month
       const startDate = new Date(selectedYear, selectedMonth, 1);
       const endDate = new Date(selectedYear, selectedMonth + 1, 0);
       
@@ -202,22 +194,18 @@ const CalendarView = () => {
     }
   });
   
-  // Process attendance data for the calendar
   useEffect(() => {
     if (monthAttendance) {
       const newAttendanceData: Record<string, AttendanceStatus> = {};
       
-      // Process holidays (records with null student_id)
       const holidays = monthAttendance.filter(record => record.student_id === null && record.status === 'H');
       
       holidays.forEach(holiday => {
         newAttendanceData[holiday.date] = 'H';
       });
       
-      // Process student attendance
       const studentAttendance = monthAttendance.filter(record => record.student_id !== null);
       
-      // Group by date
       const attendanceByDate = studentAttendance.reduce((acc, record) => {
         if (!acc[record.date]) {
           acc[record.date] = [];
@@ -226,20 +214,19 @@ const CalendarView = () => {
         return acc;
       }, {} as Record<string, AttendanceRecord[]>);
       
-      // Determine status for each date
       Object.entries(attendanceByDate).forEach(([date, records]) => {
         if (newAttendanceData[date] === 'H') {
-          // Already marked as holiday, skip
           return;
         }
         
-        // Count statuses
         const statusCounts = records.reduce((acc, record) => {
-          acc[record.status] = (acc[record.status] || 0) + 1;
+          const status = record.status;
+          if (status === 'P' || status === 'A' || status === 'L' || status === 'H') {
+            acc[status as AttendanceStatus] = (acc[status as AttendanceStatus] || 0) + 1;
+          }
           return acc;
         }, {} as Record<AttendanceStatus, number>);
         
-        // Determine most common status
         let maxCount = 0;
         let maxStatus: AttendanceStatus = 'P';
         
@@ -257,7 +244,6 @@ const CalendarView = () => {
     }
   }, [monthAttendance]);
   
-  // Set up real-time listener for attendance changes
   useEffect(() => {
     const channel = supabase
       .channel('attendance-changes')
@@ -269,7 +255,6 @@ const CalendarView = () => {
           table: 'attendance'
         },
         () => {
-          // Refetch attendance data when changes occur
           refetchAttendance();
         }
       )
@@ -357,7 +342,6 @@ const CalendarView = () => {
           description: `${MONTHS[selectedMonth]} ${selectedDay}, ${selectedYear} has been marked as a holiday.`,
         });
         
-        // Refetch attendance data
         refetchAttendance();
       } catch (error) {
         console.error('Error marking holiday:', error);
@@ -385,7 +369,6 @@ const CalendarView = () => {
           description: `${selectedStudent.name} has been marked on leave for ${MONTHS[selectedMonth]} ${selectedDay}, ${selectedYear}.`,
         });
         
-        // Refetch attendance data
         refetchAttendance();
       } catch (error) {
         console.error('Error marking leave:', error);
@@ -416,7 +399,6 @@ const CalendarView = () => {
           description: `Student has been marked as ${statusLabels[status]}.`,
         });
         
-        // Refetch attendance data
         refetchAttendance();
       } catch (error) {
         console.error('Error marking attendance:', error);
@@ -429,7 +411,6 @@ const CalendarView = () => {
     }
   };
 
-  // Fetch student attendance for the selected day
   const { data: selectedDayAttendance, refetch: refetchDayAttendance } = useQuery({
     queryKey: ['day-attendance', selectedDay, selectedMonth, selectedYear],
     queryFn: async () => {
@@ -448,14 +429,20 @@ const CalendarView = () => {
     enabled: selectedDay !== null
   });
 
-  // Get student attendance status
   const getStudentAttendanceStatus = (studentId: string): AttendanceStatus | '-' => {
     if (!selectedDay || !selectedDayAttendance) return '-';
     
     const dateString = formatDateString(selectedDay);
     const record = selectedDayAttendance.find(r => r.student_id === studentId && r.date === dateString);
     
-    return record ? record.status as AttendanceStatus : '-';
+    if (record) {
+      const status = record.status;
+      if (status === 'P' || status === 'A' || status === 'L' || status === 'H') {
+        return status as AttendanceStatus;
+      }
+    }
+    
+    return '-';
   };
 
   return (

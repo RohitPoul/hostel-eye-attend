@@ -37,12 +37,12 @@ export interface FloorData {
 
 export interface AttendanceRecord {
   id: string;
-  student_id: string;
-  status: 'P' | 'A' | 'L' | 'H';
+  student_id: string | null;
+  status: string;
   date: string;
-  room_id?: string;
-  created_at: string;
-  updated_at: string;
+  room_id?: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export const fetchBuilding = async (buildingId: string | undefined): Promise<BuildingData | null> => {
@@ -266,7 +266,12 @@ export const getDateAttendanceStatus = async (date: string): Promise<'P' | 'A' |
       .maybeSingle();
     
     if (error) throw error;
-    return data?.status as 'H' | null ?? null;
+    
+    if (data && (data.status === 'H' || data.status === 'P' || data.status === 'A' || data.status === 'L')) {
+      return data.status as 'P' | 'A' | 'L' | 'H';
+    }
+    
+    return null;
   } catch (error) {
     console.error('Error in getDateAttendanceStatus:', error);
     return null;
