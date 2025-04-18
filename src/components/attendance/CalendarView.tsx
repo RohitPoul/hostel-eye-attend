@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -12,7 +11,10 @@ import { CalendarGrid } from './calendar/CalendarGrid';
 import { AttendanceDialog } from './calendar/AttendanceDialog';
 import { HolidayDialog } from './calendar/HolidayDialog';
 import { LeaveDialog } from './calendar/LeaveDialog';
+import { HolidayPeriodDialog } from './calendar/HolidayPeriodDialog';
 import { fetchBlock, fetchFloor } from '@/utils/buildingUtils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -39,6 +41,8 @@ const CalendarView = () => {
   const calendarState = useCalendarState();
   const filters = useCalendarFilters();
   const [attendanceData, setAttendanceData] = useState<Record<string, "P" | "A" | "L" | "H">>({});
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [isHolidayPeriodOpen, setIsHolidayPeriodOpen] = useState(false);
 
   const formatDateString = (day: number) => {
     const dateObj = new Date(calendarState.selectedYear, calendarState.selectedMonth, day);
@@ -300,8 +304,42 @@ const CalendarView = () => {
     return '-';
   };
 
+  const handleStudentFilter = (studentId: string) => {
+    setSelectedStudentId(studentId === 'all-students' ? null : studentId);
+  };
+
   return (
     <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
+        <div>
+          <h2 className="text-xl font-semibold">Attendance Records</h2>
+          <p className="text-gray-500">View and filter attendance history</p>
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          <Select value={selectedStudentId || 'all-students'} onValueChange={handleStudentFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Select Student" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all-students">All Students</SelectItem>
+              {students?.map((student) => (
+                <SelectItem key={student.id} value={student.id}>
+                  {student.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button 
+            variant="outline"
+            onClick={() => setIsHolidayPeriodOpen(true)}
+          >
+            Mark Holiday Period
+          </Button>
+        </div>
+      </div>
+
       <CalendarHeader
         viewMode={calendarState.viewMode}
         selectedDate={calendarState.selectedDate}
@@ -340,7 +378,7 @@ const CalendarView = () => {
         selectedDay={calendarState.selectedDay}
         selectedMonth={calendarState.selectedMonth}
         selectedYear={calendarState.selectedYear}
-        students={students}
+        students={students?.filter(s => !selectedStudentId || s.id === selectedStudentId)}
         onHolidayClick={() => {
           calendarState.setIsStudentListOpen(false);
           calendarState.setIsHolidayDialogOpen(true);
@@ -367,6 +405,15 @@ const CalendarView = () => {
         selectedDay={calendarState.selectedDay}
         selectedMonth={calendarState.selectedMonth}
         selectedYear={calendarState.selectedYear}
+      />
+
+      <HolidayPeriodDialog
+        isOpen={isHolidayPeriodOpen}
+        onClose={() => setIsHolidayPeriodOpen(false)}
+        onSuccess={() => {
+          refetchAttendance();
+          refetchDayAttendance();
+        }}
       />
     </div>
   );
