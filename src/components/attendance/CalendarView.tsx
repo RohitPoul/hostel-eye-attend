@@ -161,8 +161,9 @@ const CalendarView = () => {
         let maxStatus: "P" | "A" | "L" | "H" = 'P';
         
         Object.entries(statusCounts).forEach(([status, count]) => {
-          if (count > maxCount) {
-            maxCount = count as number;
+          const countValue = count as number;
+          if (countValue > maxCount) {
+            maxCount = countValue;
             maxStatus = status as "P" | "A" | "L" | "H";
           }
         });
