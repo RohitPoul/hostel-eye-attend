@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface RoomProps {
@@ -46,7 +45,6 @@ export interface AttendanceRecord {
   updated_at: string;
 }
 
-// Fetch building data
 export const fetchBuilding = async (buildingId: string | undefined): Promise<BuildingData | null> => {
   if (!buildingId) return null;
   
@@ -64,7 +62,6 @@ export const fetchBuilding = async (buildingId: string | undefined): Promise<Bui
   return data as BuildingData;
 };
 
-// Fetch block data
 export const fetchBlock = async (blockId: string | undefined): Promise<BlockData | null> => {
   if (!blockId) return null;
   
@@ -82,7 +79,6 @@ export const fetchBlock = async (blockId: string | undefined): Promise<BlockData
   return data as BlockData;
 };
 
-// Fetch floor data
 export const fetchFloor = async (blockId: string | undefined, floorId: string | undefined): Promise<FloorData | null> => {
   if (!blockId || !floorId) return null;
   
@@ -95,18 +91,16 @@ export const fetchFloor = async (blockId: string | undefined, floorId: string | 
   
   if (error) {
     console.error('Error fetching floor:', error);
-    return null; // Return null instead of throwing to handle case where floor doesn't exist yet
+    return null;
   }
   
   return data as FloorData;
 };
 
-// Fetch rooms for the current floor
 export const fetchRooms = async (blockId: string | undefined, floorId: string | undefined): Promise<RoomProps[]> => {
   if (!blockId || !floorId) return [];
   
   try {
-    // First get the floor information
     const { data: floorData, error: floorError } = await supabase
       .from('floors')
       .select('*')
@@ -137,12 +131,10 @@ export const fetchRooms = async (blockId: string | undefined, floorId: string | 
   }
 };
 
-// Fetch students for a specific block and floor
 export const fetchStudents = async (blockId: string | undefined, floorId: string | undefined, blockName: string | undefined) => {
   if (!blockId || !floorId) return [];
   
   try {
-    // First get the floor information to get the floor_number
     const floor = await fetchFloor(blockId, floorId);
     if (!floor) return [];
     
@@ -164,24 +156,20 @@ export const fetchStudents = async (blockId: string | undefined, floorId: string
   }
 };
 
-// Fetch attendance for a specific date or date range
 export const fetchAttendance = async (dateStr: string | null = null, buildingId?: string, blockId?: string, floorId?: string, roomId?: string, studentId?: string) => {
   try {
     let query = supabase
       .from('attendance')
       .select('*');
     
-    // Add date filter if provided
     if (dateStr) {
       query = query.eq('date', dateStr);
     }
     
-    // Add room filter if provided
     if (roomId) {
       query = query.eq('room_id', roomId);
     }
     
-    // Add student filter if provided
     if (studentId) {
       query = query.eq('student_id', studentId);
     }
@@ -200,41 +188,8 @@ export const fetchAttendance = async (dateStr: string | null = null, buildingId?
   }
 };
 
-// Delete room function
-export const deleteRoomById = async (roomId: string) => {
-  const { error } = await supabase
-    .from('rooms')
-    .delete()
-    .eq('id', roomId);
-  
-  if (error) throw error;
-  return roomId;
-};
-
-// Format floor name helper
-export const getFloorName = (floorId: string | undefined) => {
-  if (!floorId) return '';
-  
-  // This function now expects the floor ID, not the floor number
-  // We'll need to extract the floor number from the database
-  return "Floor"; // Default fallback
-};
-
-// New helper function to get floor number and format it
-export const formatFloorNumber = (floorNumber: number | undefined | null) => {
-  if (floorNumber === undefined || floorNumber === null) return '';
-  
-  const num = parseInt(floorNumber.toString());
-  if (isNaN(num)) return ''; // Return empty string if not a valid number
-  
-  const suffix = num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th';
-  return `${num}${suffix} Floor`;
-};
-
-// Mark attendance for a specific student
 export const markAttendance = async (studentId: string, status: 'P' | 'A' | 'L' | 'H', date: string, roomId?: string) => {
   try {
-    // Check if there's already an attendance record for this student on this date
     const { data: existingRecord, error: fetchError } = await supabase
       .from('attendance')
       .select('*')
@@ -248,39 +203,32 @@ export const markAttendance = async (studentId: string, status: 'P' | 'A' | 'L' 
     }
     
     if (existingRecord) {
-      // Update existing record
       const { data, error } = await supabase
         .from('attendance')
-        .update({ status, updated_at: new Date().toISOString() })
+        .update({
+          status,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', existingRecord.id)
         .select()
         .single();
       
-      if (error) {
-        console.error('Error updating attendance:', error);
-        throw error;
-      }
-      
-      return data;
+      if (error) throw error;
+      return data as AttendanceRecord;
     } else {
-      // Create new record
       const { data, error } = await supabase
         .from('attendance')
-        .insert([{ 
-          student_id: studentId, 
-          status, 
-          date, 
-          room_id: roomId 
+        .insert([{
+          student_id: studentId,
+          status,
+          date,
+          room_id: roomId,
         }])
         .select()
         .single();
       
-      if (error) {
-        console.error('Error inserting attendance:', error);
-        throw error;
-      }
-      
-      return data;
+      if (error) throw error;
+      return data as AttendanceRecord;
     }
   } catch (error) {
     console.error('Error in markAttendance:', error);
@@ -288,55 +236,65 @@ export const markAttendance = async (studentId: string, status: 'P' | 'A' | 'L' 
   }
 };
 
-// Mark day as holiday
 export const markDayAsHoliday = async (date: string) => {
   try {
-    // For holidays, we create a special record with null student_id
     const { data, error } = await supabase
       .from('attendance')
-      .insert([{ 
-        student_id: null, 
-        status: 'H', 
-        date
+      .insert([{
+        status: 'H',
+        date,
+        student_id: null
       }])
       .select()
       .single();
     
-    if (error) {
-      console.error('Error marking holiday:', error);
-      throw error;
-    }
-    
-    return data;
+    if (error) throw error;
+    return data as AttendanceRecord;
   } catch (error) {
     console.error('Error in markDayAsHoliday:', error);
     throw error;
   }
 };
 
-// Get attendance status for a specific date
 export const getDateAttendanceStatus = async (date: string): Promise<'P' | 'A' | 'L' | 'H' | null> => {
   try {
-    // First check if it's a holiday
-    const { data: holidayData, error: holidayError } = await supabase
+    const { data, error } = await supabase
       .from('attendance')
-      .select('*')
+      .select('status')
       .eq('date', date)
       .eq('status', 'H')
       .maybeSingle();
     
-    if (holidayError && holidayError.code !== 'PGRST116') {
-      console.error('Error checking holiday:', holidayError);
-    }
-    
-    if (holidayData) {
-      return 'H';
-    }
-    
-    // Not a holiday, default to null
-    return null;
+    if (error) throw error;
+    return data?.status as 'H' | null ?? null;
   } catch (error) {
     console.error('Error in getDateAttendanceStatus:', error);
     return null;
   }
+};
+
+export const deleteRoomById = async (roomId: string) => {
+  const { error } = await supabase
+    .from('rooms')
+    .delete()
+    .eq('id', roomId);
+  
+  if (error) throw error;
+  return roomId;
+};
+
+export const getFloorName = (floorId: string | undefined) => {
+  if (!floorId) return '';
+  
+  return "Floor";
+};
+
+export const formatFloorNumber = (floorNumber: number | undefined | null) => {
+  if (floorNumber === undefined || floorNumber === null) return '';
+  
+  const num = parseInt(floorNumber.toString());
+  if (isNaN(num)) return '';
+  
+  const suffix = num === 1 ? 'st' : num === 2 ? 'nd' : num === 3 ? 'rd' : 'th';
+  return `${num}${suffix} Floor`;
 };
