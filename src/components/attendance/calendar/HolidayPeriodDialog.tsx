@@ -1,30 +1,11 @@
 
-import { Button } from '@/components/ui/button';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import * as z from 'zod';
-import { format } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-
-const formSchema = z.object({
-  startDate: z.date({
-    required_error: "Start date is required",
-  }),
-  endDate: z.date({
-    required_error: "End date is required",
-  }).refine(date => date !== undefined, {
-    message: "End date is required"
-  }),
-  description: z.string().min(1, "Description is required"),
-});
+import { supabase } from '@/integrations/supabase/client';
 
 interface HolidayPeriodDialogProps {
   isOpen: boolean;
@@ -32,46 +13,72 @@ interface HolidayPeriodDialogProps {
   onSuccess: () => void;
 }
 
-// Define the type for RPC function parameters
-interface MarkHolidayPeriodParams {
-  p_start_date: string;
-  p_end_date: string;
-  p_description: string;
-}
-
 export function HolidayPeriodDialog({
   isOpen,
   onClose,
   onSuccess,
 }: HolidayPeriodDialogProps) {
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-  });
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const formatDateString = (date: Date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const handleSubmit = async () => {
+    if (!startDate || !endDate) {
+      toast({
+        title: "Error",
+        description: "Please select both start and end dates",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (startDate > endDate) {
+      toast({
+        title: "Error",
+        description: "Start date cannot be after end date",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      // Format dates for Postgres
-      const startDateStr = values.startDate.toISOString().split('T')[0];
-      const endDateStr = values.endDate.toISOString().split('T')[0];
+      const dates: string[] = [];
+      const currentDate = new Date(startDate);
+      
+      while (currentDate <= endDate) {
+        dates.push(formatDateString(currentDate));
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
 
-      // Call the Supabase RPC function with explicit type casting
-      const { error } = await supabase.rpc('mark_holiday_period', {
-        p_start_date: startDateStr,
-        p_end_date: endDateStr,
-        p_description: values.description
-      } as MarkHolidayPeriodParams);
+      // Mark each day as a holiday
+      for (const date of dates) {
+        const { error } = await supabase
+          .from('attendance')
+          .upsert([
+            {
+              date,
+              status: 'H',
+              student_id: null,
+            }
+          ]);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
 
       toast({
         title: "Success",
-        description: "Holiday period has been marked successfully.",
+        description: `Marked ${dates.length} days as holidays`,
       });
 
       onSuccess();
       onClose();
-      form.reset();
     } catch (error) {
       console.error('Error marking holiday period:', error);
       toast({
@@ -79,127 +86,51 @@ export function HolidayPeriodDialog({
         description: "Failed to mark holiday period. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Mark Holiday Period</DialogTitle>
           <DialogDescription>
-            Set a holiday period that will apply to all students.
+            Select a date range to mark as holidays. All days in this range will be marked as holidays for all students.
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="startDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Start Date</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? (
-                            format(field.value, "PPP")
-                          ) : (
-                            <span>Pick a date</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) =>
-                          date < new Date(new Date().setHours(0, 0, 0, 0))
-                        }
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="start-date">Start Date</Label>
+            <Calendar
+              mode="single"
+              selected={startDate}
+              onSelect={setStartDate}
+              className="rounded-md border p-3"
             />
+          </div>
 
-            <FormField
-              control={form.control}
-              name="endDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>End Date</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? (
-                            format(field.value, "PPP")
-                          ) : (
-                            <span>Pick a date</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        disabled={(date) =>
-                          date < (form.watch("startDate") || new Date())
-                        }
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
+          <div className="grid gap-2">
+            <Label htmlFor="end-date">End Date</Label>
+            <Calendar
+              mode="single"
+              selected={endDate}
+              onSelect={setEndDate}
+              className="rounded-md border p-3"
             />
+          </div>
+        </div>
 
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Summer Break" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <DialogFooter>
-              <Button variant="outline" type="button" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button type="submit">Mark Holidays</Button>
-            </DialogFooter>
-          </form>
-        </Form>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={isLoading}>
+            {isLoading ? "Saving..." : "Mark Holidays"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
