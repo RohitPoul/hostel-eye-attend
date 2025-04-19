@@ -8,7 +8,7 @@ export const useAttendanceData = (
   selectedYear: number,
   selectedMonth: number,
   selectedDay: number | null,
-  filterRoom: string | null,
+  roomId?: string
 ) => {
   const { toast } = useToast();
   const [attendanceData, setAttendanceData] = useState<Record<string, "P" | "A" | "L" | "H">>({});
@@ -19,7 +19,7 @@ export const useAttendanceData = (
   };
 
   const { data: monthAttendance, refetch: refetchAttendance } = useQuery({
-    queryKey: ['attendance', selectedYear, selectedMonth, filterRoom],
+    queryKey: ['attendance', selectedYear, selectedMonth, roomId],
     queryFn: async () => {
       const startDate = new Date(selectedYear, selectedMonth, 1);
       const endDate = new Date(selectedYear, selectedMonth + 1, 0);
@@ -33,8 +33,8 @@ export const useAttendanceData = (
         .gte('date', startDateStr)
         .lte('date', endDateStr);
       
-      if (filterRoom && filterRoom !== 'all-rooms') {
-        query = query.eq('room_id', filterRoom);
+      if (roomId) {
+        query = query.eq('room_id', roomId);
       }
       
       const { data, error } = await query;
@@ -176,6 +176,23 @@ export const useAttendanceData = (
     }
     
     return '-';
+  };
+
+  const isHolidayAlreadyMarked = (day: number): boolean => {
+    if (!attendanceData) return false;
+    
+    const dateString = formatDateString(selectedYear, selectedMonth, day);
+    const dayData = attendanceData[dateString];
+    
+    if (!dayData || !dayData.isHoliday) return false;
+    
+    // Only consider it a holiday if roomId is provided AND matches the holidayRoomId
+    if (roomId && typeof dayData.holidayRoomId === 'string') {
+      return dayData.holidayRoomId === roomId;
+    }
+    
+    // If no roomId provided, consider it a holiday if it has any holidayRoomId
+    return !!dayData.holidayRoomId;
   };
 
   return {

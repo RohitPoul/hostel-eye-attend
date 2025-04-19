@@ -1,3 +1,4 @@
+
 import { useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -136,18 +137,29 @@ export const useFloorMutations = (onSuccessCallback?: () => void) => {
     }
   });
 
-  // Add updateFloorMutation
+  // Update floor name mutation
   const updateFloorMutation = useMutation({
     mutationFn: async ({ floorId, newName }: { floorId: string, newName: string }) => {
-      const { error } = await supabase
+      // First, get the current floor data
+      const { data: floor, error: fetchError } = await supabase
+        .from('floors')
+        .select('*')
+        .eq('id', floorId)
+        .single();
+      
+      if (fetchError || !floor) throw new Error('Floor not found');
+
+      // Update only the name in the floors table
+      const { error: updateError } = await supabase
         .from('floors')
         .update({ name: newName })
         .eq('id', floorId);
       
-      if (error) throw error;
+      if (updateError) throw updateError;
+      
       return { floorId, name: newName };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['floors', blockId] });
       
       toast({

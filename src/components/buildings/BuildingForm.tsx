@@ -1,316 +1,266 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, Trash2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { formatFloorNumber } from '@/utils/roomUtils';
+
+// Define the form schema with Zod
+const formSchema = z.object({
+  buildingName: z.string().min(1, "Building name is required"),
+  blocks: z.array(
+    z.object({
+      id: z.string().optional(),
+      name: z.string().min(1, "Block name is required"),
+      floors: z.array(
+        z.object({
+          floorNumber: z.number().min(1, "Floor number is required"),
+        })
+      ).optional(),
+    })
+  ),
+});
+
+type FormValues = z.infer<typeof formSchema>;
 
 interface BuildingFormProps {
-  isEditing?: boolean;
+  isEditing: boolean;
   buildingId?: string;
 }
 
-interface Building {
-  id: string;
-  name: string;
-}
-
-const BuildingForm = ({ isEditing = false, buildingId }: BuildingFormProps) => {
-  const [formData, setFormData] = useState({
-    name: '',
-    blocks: '4',
-    floorsPerBlock: '4',
-    roomsPerFloor: '8',
-  });
+const BuildingForm = ({ isEditing, buildingId }: BuildingFormProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch building data if editing
-  const { data: buildingData, isLoading: isFetchingBuilding } = useQuery({
-    queryKey: ['building', buildingId],
-    queryFn: async () => {
-      if (!buildingId || !isEditing) return null;
-      
-      const { data, error } = await supabase
-        .from('buildings')
-        .select('*')
-        .eq('id', buildingId)
-        .single();
-      
-      if (error) {
-        console.error('Error fetching building:', error);
-        throw error;
-      }
-      
-      return data;
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      buildingName: '',
+      blocks: [{ name: '', floors: [{ floorNumber: 1 }] }],
     },
-    enabled: isEditing && !!buildingId,
   });
 
-  // Set form data when building data is loaded
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "blocks"
+  });
+
+  // Load building data for editing
   useEffect(() => {
-    if (buildingData) {
-      setFormData(prev => ({
-        ...prev,
-        name: buildingData.name || '',
-      }));
-    }
-  }, [buildingData]);
+    if (isEditing && buildingId) {
+      const loadBuildingData = async () => {
+        const { data: building, error: buildingError } = await supabase
+          .from('buildings')
+          .select('*')
+          .eq('id', buildingId)
+          .single();
 
-  // Create building mutation
-  const createBuilding = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      // First, insert the building
-      const { data: newBuilding, error } = await supabase
-        .from('buildings')
-        .insert([{ name: data.name }])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      if (!newBuilding) throw new Error('Failed to create building');
-      
-      // Then create the blocks
-      const blockCount = parseInt(data.blocks);
-      if (blockCount > 0) {
-        const blocks = Array.from({ length: blockCount }).map((_, i) => ({
-          building_id: newBuilding.id,
-          name: `Block ${String.fromCharCode(65 + i)}`, // Block A, Block B, etc.
-        }));
-        
-        const { data: createdBlocks, error: blocksError } = await supabase
+        if (buildingError) throw buildingError;
+
+        const { data: blocks, error: blockError } = await supabase
           .from('blocks')
-          .insert(blocks)
-          .select();
-        
-        if (blocksError) throw blocksError;
+          .select('*')
+          .eq('building_id', buildingId);
 
-        // For each block, create floors
-        const floorsPerBlock = parseInt(data.floorsPerBlock);
-        const roomsPerFloor = parseInt(data.roomsPerFloor);
-        
-        if (floorsPerBlock > 0 && roomsPerFloor > 0 && createdBlocks) {
-          for (const block of createdBlocks) {
-            // Create floors for each block
-            const floors = Array.from({ length: floorsPerBlock }).map((_, i) => ({
-              block_id: block.id,
-              floor_number: i + 1,
-            }));
-            
-            const { data: createdFloors, error: floorsError } = await supabase
+        if (blockError) throw blockError;
+
+        // Fetch floors for each block
+        const blocksWithFloors = await Promise.all(
+          blocks.map(async (block) => {
+            const { data: floors, error: floorError } = await supabase
               .from('floors')
-              .insert(floors)
-              .select();
-            
-            if (floorsError) throw floorsError;
-            
-            // Create rooms for each floor
-            if (createdFloors) {
-              for (const floor of createdFloors) {
-                const rooms = Array.from({ length: roomsPerFloor }).map((_, i) => ({
-                  name: `${block.name.replace('Block ', '')}-${floor.floor_number}${String(i + 1).padStart(2, '0')}`,
-                  floor_id: floor.floor_number,
-                  block_id: block.id
-                }));
-                
-                const { error: roomsError } = await supabase
-                  .from('rooms')
-                  .insert(rooms);
-                
-                if (roomsError) throw roomsError;
-              }
-            }
+              .select('floor_number')
+              .eq('block_id', block.id);
+
+            if (floorError) throw floorError;
+
+            return {
+              ...block,
+              floors: floors.map(floor => ({ floorNumber: floor.floor_number })),
+            };
+          })
+        );
+
+        form.reset({
+          buildingName: building.name,
+          blocks: blocksWithFloors,
+        });
+      };
+
+      loadBuildingData();
+    }
+  }, [isEditing, buildingId, form]);
+
+  // Modify the onSubmit function to include the name property for floors
+  const onSubmit = async (values: FormValues) => {
+    setIsSubmitting(true);
+
+    try {
+      let buildingIdToUse = buildingId;
+
+      // Insert or update building
+      if (isEditing && buildingId) {
+        const { error } = await supabase
+          .from('buildings')
+          .update({ name: values.buildingName })
+          .eq('id', buildingId);
+
+        if (error) throw error;
+      } else {
+        // Insert new building
+        const { data, error } = await supabase
+          .from('buildings')
+          .insert([{ name: values.buildingName }])
+          .select();
+
+        if (error) throw error;
+        buildingIdToUse = data[0].id;
+      }
+
+      // Insert blocks
+      for (const block of values.blocks) {
+        // Check if block already exists when editing
+        if (isEditing && block.id) {
+          const { error } = await supabase
+            .from('blocks')
+            .update({ name: block.name })
+            .eq('id', block.id);
+
+          if (error) throw error;
+        } else {
+          // Insert new block
+          const { data: blockData, error: blockError } = await supabase
+            .from('blocks')
+            .insert([{
+              name: block.name,
+              building_id: buildingIdToUse
+            }])
+            .select();
+
+          if (blockError) throw blockError;
+
+          const blockId = blockData[0].id;
+
+          // Insert floors for each block
+          if (block.floors && block.floors.length > 0) {
+            // Make sure to include the name property for each floor
+            const floorsWithNames = block.floors.map((floor, index) => ({
+              block_id: blockId,
+              floor_number: floor.floorNumber,
+              name: `${formatFloorNumber(floor.floorNumber)}`
+            }));
+
+            const { error: floorError } = await supabase
+              .from('floors')
+              .insert(floorsWithNames);
+
+            if (floorError) throw floorError;
           }
         }
       }
-      
-      return newBuilding;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['buildings'] });
+
       toast({
-        title: "Building Created",
-        description: `${formData.name} has been added successfully.`,
+        title: isEditing ? "Building Updated" : "Building Created",
+        description: `${values.buildingName} has been ${isEditing ? 'updated' : 'created'} successfully.`,
       });
+
       navigate('/buildings');
-    },
-    onError: (error) => {
-      console.error('Error creating building:', error);
+    } catch (error) {
+      console.error('Error saving building:', error);
       toast({
         title: "Error",
-        description: "Failed to create building. Please try again.",
+        description: `Failed to ${isEditing ? 'update' : 'create'} building. Please try again.`,
         variant: "destructive",
       });
-    }
-  });
-
-  // Update building mutation
-  const updateBuilding = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      const { error } = await supabase
-        .from('buildings')
-        .update({ name: data.name })
-        .eq('id', buildingId!);
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['buildings'] });
-      queryClient.invalidateQueries({ queryKey: ['building', buildingId] });
-      toast({
-        title: "Building Updated",
-        description: `${formData.name} has been updated successfully.`,
-      });
-      navigate('/buildings');
-    },
-    onError: (error) => {
-      console.error('Error updating building:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update building. Please try again.",
-        variant: "destructive",
-      });
-    }
-  });
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Simple validation
-    if (!formData.name || !formData.blocks || !formData.floorsPerBlock || !formData.roomsPerFloor) {
-      toast({
-        title: "Validation Error",
-        description: "All fields are required",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (isEditing && buildingId) {
-      updateBuilding.mutate(formData);
-    } else {
-      createBuilding.mutate(formData);
+    } finally {
+      setIsSubmitting(false);
     }
   };
-
-  if (isEditing && isFetchingBuilding) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <p className="text-lg text-gray-500">Loading building data...</p>
-      </div>
-    );
-  }
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm">
-      <div className="mb-6">
-        <Button
-          variant="ghost"
-          className="text-muted-foreground"
-          onClick={() => navigate('/buildings')}
-        >
-          <ChevronLeft className="h-4 w-4 mr-2" />
-          Back to Buildings
+    <div className="container max-w-4xl mx-auto py-10">
+      <div className="mb-8">
+        <Button variant="ghost" onClick={() => navigate('/buildings')}>
+          ← Back to Buildings
         </Button>
       </div>
 
-      <h2 className="text-xl font-semibold mb-6">
-        {isEditing ? 'Edit Building' : 'Add New Building'}
-      </h2>
+      <div className="bg-white rounded-lg shadow-md p-8">
+        <h1 className="text-2xl font-semibold mb-6">{isEditing ? 'Edit Building' : 'Add Building'}</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label htmlFor="name">Building Name</Label>
-            <Input
-              id="name"
-              name="name"
-              placeholder="e.g. Satyaadi"
-              value={formData.name}
-              onChange={handleChange}
-              required
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <FormField
+              control={form.control}
+              name="buildingName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Building Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter building name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="blocks">Number of Blocks</Label>
-            <Input
-              id="blocks"
-              name="blocks"
-              type="number"
-              min="1"
-              placeholder="e.g. 4"
-              value={formData.blocks}
-              onChange={handleChange}
-              required
-              disabled={isEditing} // Can't change the number of blocks when editing
-            />
-          </div>
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Blocks</h2>
+              <ul className="space-y-4">
+                {fields.map((item, index) => (
+                  <li key={item.id} className="grid grid-cols-3 gap-4">
+                    <FormField
+                      control={form.control}
+                      name={`blocks.${index}.name` as const}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Block Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Enter block name" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => remove(index)}
+                      className="w-10 h-10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => append({ name: '', floors: [{ floorNumber: 1 }] })}
+                className="mt-4"
+              >
+                Add Block <Plus className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="floorsPerBlock">Floors per Block</Label>
-            <Input
-              id="floorsPerBlock"
-              name="floorsPerBlock"
-              type="number"
-              min="1"
-              placeholder="e.g. 4"
-              value={formData.floorsPerBlock}
-              onChange={handleChange}
-              required
-              disabled={isEditing} // Can't change the number of floors when editing
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="roomsPerFloor">Rooms per Floor</Label>
-            <Input
-              id="roomsPerFloor"
-              name="roomsPerFloor"
-              type="number"
-              min="1"
-              placeholder="e.g. 8"
-              value={formData.roomsPerFloor}
-              onChange={handleChange}
-              required
-              disabled={isEditing} // Can't change the number of rooms when editing
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end space-x-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate('/buildings')}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            className="bg-primary hover:bg-primary-dark"
-            disabled={createBuilding.isPending || updateBuilding.isPending}
-          >
-            {isEditing 
-              ? (updateBuilding.isPending ? 'Updating...' : 'Update Building') 
-              : (createBuilding.isPending ? 'Creating...' : 'Create Building')}
-          </Button>
-        </div>
-      </form>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Building' : 'Create Building')}
+            </Button>
+          </form>
+        </Form>
+      </div>
     </div>
   );
 };

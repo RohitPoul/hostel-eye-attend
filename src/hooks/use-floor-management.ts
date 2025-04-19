@@ -37,7 +37,7 @@ export const useFloorManagement = () => {
     resetEditMode();
   };
 
-  const { deleteFloorMutation, updateRoomCountMutation } = useFloorMutations(onMutationSuccess);
+  const { deleteFloorMutation, updateRoomCountMutation, updateFloorMutation } = useFloorMutations(onMutationSuccess);
 
   // Update state when floor data is loaded
   useEffect(() => {
@@ -46,14 +46,12 @@ export const useFloorManagement = () => {
         const updatedFloors = await Promise.all(
           floorData.map(async (floor) => {
             // Fetch rooms for this floor to get the count
-            // Fix: Convert floor_number to string before passing it to fetchRooms
             const rooms = await fetchRooms(blockId, floor.id);
-            // Here we're using the floor's actual floor_number property for the name
-            const floorName = getFloorName(floor.floor_number);
+            // Use the floor's name property directly from the database
             
             return {
               id: floor.id,
-              name: floorName,
+              name: floor.name || getFloorName(floor.floor_number),
               roomCount: rooms.length,
               floor_number: floor.floor_number
             };
@@ -112,6 +110,7 @@ export const useFloorManagement = () => {
     handleEditRoomCount,
     saveRoomCount,
     deleteFloorMutation,
-    updateRoomCountMutation
+    updateRoomCountMutation,
+    updateFloorMutation
   };
 };

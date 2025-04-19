@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { RoomProps } from '@/types/room';
 
@@ -44,4 +43,37 @@ export const deleteRoomById = async (roomId: string) => {
   
   if (error) throw error;
   return roomId;
+};
+
+export const updateRoomName = async (roomId: string, newName: string) => {
+  try {
+    // Get the current room data first
+    const { data: room, error: fetchError } = await supabase
+      .from('rooms')
+      .select('*')
+      .eq('id', roomId)
+      .single();
+    
+    if (fetchError) {
+      console.error('Error fetching room:', fetchError);
+      throw fetchError;
+    }
+    
+    // Update only the name field, keeping all other fields intact
+    const { data, error } = await supabase
+      .from('rooms')
+      .update({ name: newName })
+      .eq('id', roomId)
+      .select();
+    
+    if (error) {
+      console.error('Error updating room name:', error);
+      throw error;
+    }
+    
+    return data[0];
+  } catch (error) {
+    console.error('Error in updateRoomName:', error);
+    throw error;
+  }
 };

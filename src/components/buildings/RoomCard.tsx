@@ -1,46 +1,127 @@
 
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Edit, Trash2, User, Plus, DoorOpen } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Layers, Trash2, ChevronRight, Edit2, Check, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { RoomProps } from '@/utils/roomUtils';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { RoomProps } from '@/types/room';
+import { updateRoomName } from '@/utils/roomOperations';
 
 interface RoomCardProps {
-  room: RoomProps;
+  room: {
+    id: string;
+    name: string;
+    students?: {
+      id: string;
+      name: string;
+      registration_no: string;
+      photo_url?: string;
+      phone_number?: string;
+    }[];
+  };
   buildingId?: string;
   blockId?: string;
   floorId?: string;
   onDeleteClick: (room: RoomProps) => void;
 }
 
-const RoomCard = ({ 
-  room, 
-  buildingId, 
-  blockId, 
-  floorId, 
-  onDeleteClick 
+const RoomCard = ({
+  room,
+  buildingId,
+  blockId,
+  floorId,
+  onDeleteClick
 }: RoomCardProps) => {
   const navigate = useNavigate();
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(room.name);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const updateNameMutation = useMutation({
+    mutationFn: ({ roomId, newName }: { roomId: string, newName: string }) => 
+      updateRoomName(roomId, newName),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rooms', blockId, floorId] });
+      toast({
+        title: "Success",
+        description: "Room name updated successfully",
+      });
+      setIsEditingName(false);
+    },
+    onError: (error) => {
+      console.error('Error updating room name:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update room name",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleNameSave = () => {
+    if (editedName.trim()) {
+      updateNameMutation.mutate({ roomId: room.id, newName: editedName.trim() });
+    }
+  };
+
+  const studentCount = room.students?.length || 0;
 
   return (
-    <Card key={room.id} className="card-hover overflow-hidden">
-      <div className="bg-amber-50 px-4 py-3 flex justify-between items-center">
+    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 transition-all duration-200 hover:shadow-md hover:-translate-y-1">
+      <div className="flex justify-between items-start">
         <div className="flex items-center">
-          <div className="p-2 rounded-full bg-amber-100 mr-2">
-            <DoorOpen className="h-5 w-5 text-amber-600" />
+          <div className="p-2 rounded-full bg-blue-100 mr-3">
+            <Layers className="h-5 w-5 text-blue-600" />
           </div>
-          <h3 className="font-medium text-amber-800">{room.name}</h3>
+          <div>
+            {isEditingName ? (
+              <div className="flex items-center space-x-2">
+                <Input
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  className="h-8 w-40"
+                  autoFocus
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0"
+                  onClick={handleNameSave}
+                  disabled={updateNameMutation.isPending}
+                >
+                  {updateNameMutation.isPending ? '...' : <Check className="h-4 w-4" />}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <h3 className="font-medium">{room.name}</h3>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0"
+                  onClick={() => {
+                    setEditedName(room.name);
+                    setIsEditingName(true);
+                  }}
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            
+            <div className="flex items-center mt-1">
+              <Users className="h-3.5 w-3.5 text-gray-500 mr-1" />
+              <p className="text-sm text-gray-500">
+                {studentCount} Student{studentCount !== 1 ? 's' : ''}
+              </p>
+            </div>
+          </div>
         </div>
         
-        <div className="flex space-x-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-gray-500 hover:text-amber-600 hover:bg-amber-100"
-            onClick={() => navigate(`/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms/${room.id}/edit`)}
-          >
-            <Edit className="h-4 w-4" />
-          </Button>
+        <div>
           <Button
             variant="ghost"
             size="icon"
@@ -52,65 +133,27 @@ const RoomCard = ({
         </div>
       </div>
       
-      <CardContent className="p-4">
-        <div className="flex justify-between items-center mb-4">
-          <div className="text-sm text-gray-500">
-            {room.students?.length || 0} {(room.students?.length || 0) === 1 ? 'Student' : 'Students'}
-          </div>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs border-amber-500 text-amber-600 hover:bg-amber-50"
-            onClick={() => navigate(`/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms/${room.id}/add-student`)}
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add Student
-          </Button>
-        </div>
+      <div className="flex space-x-2 mt-4">
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1 justify-center"
+          onClick={() => navigate(`/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms/${room.id}/edit`)}
+        >
+          Edit
+        </Button>
         
-        {room.students && room.students.length > 0 ? (
-          <div className="space-y-3">
-            {room.students.map((student) => (
-              <div
-                key={student.id}
-                className="flex items-center p-2 rounded-md hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => navigate(`/students/${student.id}`)}
-              >
-                <div className="h-10 w-10 rounded-full overflow-hidden mr-3 bg-gray-200 flex items-center justify-center">
-                  {student.photo_url ? (
-                    <img
-                      src={student.photo_url}
-                      alt={student.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <User className="h-5 w-5 text-gray-400" />
-                  )}
-                </div>
-                <div>
-                  <div className="font-medium text-sm">{student.name}</div>
-                  <div className="text-xs text-gray-500">{student.registration_no}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-6">
-            <User className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-400">No students assigned</p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-2 text-primary hover:bg-primary-light"
-              onClick={() => navigate(`/buildings/${buildingId}/blocks/${blockId}/floors/${floorId}/rooms/${room.id}/add-student`)}
-            >
-              Add Student
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="flex-1 justify-center text-green-600 hover:bg-green-50"
+          onClick={() => navigate(`/students?room=${room.id}`)}
+        >
+          View Students
+          <ChevronRight className="h-4 w-4 ml-1" />
+        </Button>
+      </div>
+    </div>
   );
 };
 
