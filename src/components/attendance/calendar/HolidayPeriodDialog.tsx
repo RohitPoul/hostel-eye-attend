@@ -55,9 +55,9 @@ export function HolidayPeriodDialog({
       const startDateStr = values.startDate.toISOString().split('T')[0];
       const endDateStr = values.endDate.toISOString().split('T')[0];
 
-      // Use the correct types for the supabase.rpc call
-      // Specify unknown as the return type (or void if the function doesn't return anything)
-      const { error } = await supabase.rpc<void, MarkHolidayPeriodParams>('mark_holiday_period', {
+      // Call the Supabase RPC function without specifying generic type parameters
+      // Let TypeScript infer the types instead
+      const { error } = await supabase.rpc('mark_holiday_period', {
         p_start_date: startDateStr,
         p_end_date: endDateStr,
         p_description: values.description
