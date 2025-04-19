@@ -6,12 +6,14 @@ export const useCalendarFilters = () => {
   const [filterBlock, setFilterBlock] = useState<string | null>(null);
   const [filterFloor, setFilterFloor] = useState<string | null>(null);
   const [filterRoom, setFilterRoom] = useState<string | null>(null);
+  const [filterStudent, setFilterStudent] = useState<string | null>(null);
 
   const resetFilters = () => {
     setFilterBuilding(null);
     setFilterBlock(null);
     setFilterFloor(null);
     setFilterRoom(null);
+    setFilterStudent(null);
   };
 
   return {
@@ -19,10 +21,12 @@ export const useCalendarFilters = () => {
     filterBlock,
     filterFloor,
     filterRoom,
+    filterStudent,
     setFilterBuilding,
     setFilterBlock,
     setFilterFloor,
     setFilterRoom,
+    setFilterStudent,
     resetFilters,
   };
 };

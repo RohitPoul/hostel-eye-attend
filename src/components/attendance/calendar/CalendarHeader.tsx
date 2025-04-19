@@ -1,4 +1,3 @@
-
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -84,6 +83,22 @@ export function CalendarHeader({
     },
     enabled: !!filters.filterBlock && !!filters.filterFloor && 
       filters.filterBlock !== 'all-blocks' && filters.filterFloor !== 'all-floors'
+  });
+
+  const { data: students } = useQuery({
+    queryKey: ['students', filters.filterBlock, filters.filterFloor, filters.filterRoom],
+    queryFn: async () => {
+      let query = supabase.from('students').select('id, name');
+      
+      if (filters.filterRoom) {
+        query = query.eq('room_id', filters.filterRoom);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!(filters.filterBlock && filters.filterFloor)
   });
 
   return (
@@ -173,6 +188,21 @@ export function CalendarHeader({
                     <SelectItem value="all-rooms">All Rooms</SelectItem>
                     {rooms?.map(room => (
                       <SelectItem key={room.id} value={room.id}>{room.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Student</label>
+                <Select value={filters.filterStudent || "all-students"} onValueChange={filters.setFilterStudent}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Students" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-students">All Students</SelectItem>
+                    {students?.map(student => (
+                      <SelectItem key={student.id} value={student.id}>{student.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
