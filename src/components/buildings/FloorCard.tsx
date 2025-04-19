@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Layers, Trash2, ChevronRight } from 'lucide-react';
+import { Layers, Trash2, ChevronRight, Edit2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -18,6 +18,7 @@ interface FloorCardProps {
   onEditRoomCount: () => void;
   onSaveRoomCount: () => void;
   onEditRoomCountChange: (count: number) => void;
+  onUpdateFloorName?: (newName: string) => void;
   isPending: boolean;
 }
 
@@ -34,9 +35,19 @@ const FloorCard = ({
   onEditRoomCount,
   onSaveRoomCount,
   onEditRoomCountChange,
+  onUpdateFloorName,
   isPending
 }: FloorCardProps) => {
   const navigate = useNavigate();
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(name);
+
+  const handleNameSave = () => {
+    if (onUpdateFloorName && editedName.trim()) {
+      onUpdateFloorName(editedName.trim());
+      setIsEditingName(false);
+    }
+  };
 
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 transition-all duration-200 hover:shadow-md hover:-translate-y-1">
@@ -46,7 +57,36 @@ const FloorCard = ({
             <Layers className="h-5 w-5 text-green-600" />
           </div>
           <div>
-            <h3 className="font-medium">{name}</h3>
+            {isEditingName ? (
+              <div className="flex items-center space-x-2">
+                <Input
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  className="h-8 w-40"
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0"
+                  onClick={handleNameSave}
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <h3 className="font-medium">{name}</h3>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setIsEditingName(true)}
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            {/* Room count editing section */}
             <div className="flex items-center">
               {isEditMode && id === editFloorId ? (
                 <div className="flex items-center space-x-2">

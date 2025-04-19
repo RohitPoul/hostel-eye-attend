@@ -1,4 +1,3 @@
-
 import { useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
@@ -137,8 +136,40 @@ export const useFloorMutations = (onSuccessCallback?: () => void) => {
     }
   });
 
+  // Add updateFloorMutation
+  const updateFloorMutation = useMutation({
+    mutationFn: async ({ floorId, newName }: { floorId: string, newName: string }) => {
+      const { error } = await supabase
+        .from('floors')
+        .update({ name: newName })
+        .eq('id', floorId);
+      
+      if (error) throw error;
+      return { floorId, name: newName };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['floors', blockId] });
+      
+      toast({
+        title: "Floor Updated",
+        description: "Floor name has been updated successfully.",
+      });
+      
+      if (onSuccessCallback) onSuccessCallback();
+    },
+    onError: (error) => {
+      console.error('Error updating floor:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update floor name. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
   return {
     deleteFloorMutation,
-    updateRoomCountMutation
+    updateRoomCountMutation,
+    updateFloorMutation
   };
 };

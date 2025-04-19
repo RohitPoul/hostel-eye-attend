@@ -1,5 +1,5 @@
-
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useFloorManagement } from '@/hooks/use-floor-management';
 import FloorBreadcrumb from './FloorBreadcrumb';
 import FloorCard from './FloorCard';
@@ -8,9 +8,10 @@ import DeleteFloorDialog from './DeleteFloorDialog';
 
 const FloorList = () => {
   const navigate = useNavigate();
+  const { buildingId, blockId } = useParams();
   const {
-    buildingId,
-    blockId,
+    buildingId: floorBuildingId,
+    blockId: floorBlockId,
     floors,
     isLoading,
     building,
@@ -29,7 +30,8 @@ const FloorList = () => {
     handleEditRoomCount,
     saveRoomCount,
     deleteFloorMutation,
-    updateRoomCountMutation
+    updateRoomCountMutation,
+    updateFloorMutation
   } = useFloorManagement();
 
   const buildingName = building?.name || "Loading...";
@@ -63,19 +65,18 @@ const FloorList = () => {
           {floors.map((floor) => (
             <FloorCard
               key={floor.id}
-              id={floor.id}
-              name={floor.name}
-              roomCount={floor.roomCount}
+              {...floor}
               buildingId={buildingId}
               blockId={blockId}
               isEditMode={isEditMode}
               editRoomCount={editRoomCount}
+              editFloorId={editFloorId}
               onDelete={() => handleDeleteClick(floor)}
               onEditRoomCount={() => handleEditRoomCount(floor)}
               onSaveRoomCount={saveRoomCount}
-              onEditRoomCountChange={(count) => setEditRoomCount(count)}
+              onEditRoomCountChange={setEditRoomCount}
+              onUpdateFloorName={(newName) => updateFloorMutation.mutate({ floorId: floor.id, newName })}
               isPending={updateRoomCountMutation.isPending}
-              editFloorId={editFloorId}
             />
           ))}
         </div>
@@ -84,9 +85,7 @@ const FloorList = () => {
       <DeleteFloorDialog
         isOpen={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
-        floorName={floorToDelete?.name}
-        password={password}
-        onPasswordChange={setPassword}
+        floorToDelete={floorToDelete}
         onConfirmDelete={confirmDelete}
         isPending={deleteFloorMutation.isPending}
       />
