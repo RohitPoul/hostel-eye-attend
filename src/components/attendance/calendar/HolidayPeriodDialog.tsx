@@ -1,7 +1,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon } from 'lucide-react';
@@ -20,6 +20,8 @@ const formSchema = z.object({
   }),
   endDate: z.date({
     required_error: "End date is required",
+  }).refine(date => date !== undefined, {
+    message: "End date is required"
   }),
   description: z.string().min(1, "Description is required"),
 });
@@ -42,9 +44,14 @@ export function HolidayPeriodDialog({
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
+      // Format dates for Postgres
+      const startDateStr = values.startDate.toISOString().split('T')[0];
+      const endDateStr = values.endDate.toISOString().split('T')[0];
+
+      // Call the RPC function with typed parameters
       const { error } = await supabase.rpc('mark_holiday_period', {
-        p_start_date: values.startDate.toISOString().split('T')[0],
-        p_end_date: values.endDate.toISOString().split('T')[0],
+        p_start_date: startDateStr,
+        p_end_date: endDateStr,
         p_description: values.description
       });
 
@@ -117,6 +124,7 @@ export function HolidayPeriodDialog({
                       />
                     </PopoverContent>
                   </Popover>
+                  <FormMessage />
                 </FormItem>
               )}
             />
@@ -158,6 +166,7 @@ export function HolidayPeriodDialog({
                       />
                     </PopoverContent>
                   </Popover>
+                  <FormMessage />
                 </FormItem>
               )}
             />
@@ -171,6 +180,7 @@ export function HolidayPeriodDialog({
                   <FormControl>
                     <Input placeholder="e.g., Summer Break" {...field} />
                   </FormControl>
+                  <FormMessage />
                 </FormItem>
               )}
             />
