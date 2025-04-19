@@ -1,55 +1,28 @@
-import { useEffect, useState } from 'react';
-import { useToast } from '@/hooks/use-toast';
+
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { markAttendance, markDayAsHoliday } from '@/utils/attendanceUtils';
+import { fetchBlock, fetchFloor } from '@/utils/buildingUtils';
 import { StudentProps } from '@/types/room';
 import { useCalendarState } from '@/hooks/use-calendar-state';
 import { useCalendarFilters } from '@/hooks/use-calendar-filters';
-import { CalendarHeader } from './calendar/CalendarHeader';
+import { useAttendanceData } from '@/hooks/use-attendance-data';
+import { CalendarHeaderTop } from './calendar/CalendarHeader';
+import { CalendarHeader } from './calendar/header/CalendarHeader';
 import { CalendarGrid } from './calendar/CalendarGrid';
 import { AttendanceDialog } from './calendar/AttendanceDialog';
 import { HolidayDialog } from './calendar/HolidayDialog';
 import { LeaveDialog } from './calendar/LeaveDialog';
 import { HolidayPeriodDialog } from './calendar/HolidayPeriodDialog';
-import { fetchBlock, fetchFloor } from '@/utils/buildingUtils';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
-
-const statusColors = {
-  'P': 'bg-green-100 text-green-800',
-  'A': 'bg-red-100 text-red-800',
-  'L': 'bg-yellow-100 text-yellow-800',
-  'H': 'bg-blue-100 text-blue-800',
-  '-': 'bg-gray-100 text-gray-500'
-};
-
-const statusLabels = {
-  'P': 'Present',
-  'A': 'Absent',
-  'L': 'Leave',
-  'H': 'Holiday',
-};
+import { AttendanceLegend } from './calendar/AttendanceLegend';
 
 const CalendarView = () => {
-  const { toast } = useToast();
   const calendarState = useCalendarState();
   const filters = useCalendarFilters();
-  const [attendanceData, setAttendanceData] = useState<Record<string, "P" | "A" | "L" | "H">>({});
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [isHolidayPeriodOpen, setIsHolidayPeriodOpen] = useState(false);
 
-  const formatDateString = (day: number) => {
-    const dateObj = new Date(calendarState.selectedYear, calendarState.selectedMonth, day);
-    return dateObj.toISOString().split('T')[0];
-  };
-
-  const { data: students, refetch: refetchStudents } = useQuery({
+  const { data: students } = useQuery({
     queryKey: ['students', filters.filterBuilding, filters.filterBlock, filters.filterFloor, filters.filterRoom],
     queryFn: async () => {
       let query = supabase.from('students').select('*');
@@ -79,105 +52,19 @@ const CalendarView = () => {
     }
   });
 
-  const { data: monthAttendance, refetch: refetchAttendance } = useQuery({
-    queryKey: ['attendance', calendarState.selectedYear, calendarState.selectedMonth, 
-               filters.filterBuilding, filters.filterBlock, filters.filterFloor, filters.filterRoom],
-    queryFn: async () => {
-      const startDate = new Date(calendarState.selectedYear, calendarState.selectedMonth, 1);
-      const endDate = new Date(calendarState.selectedYear, calendarState.selectedMonth + 1, 0);
-      
-      const startDateStr = startDate.toISOString().split('T')[0];
-      const endDateStr = endDate.toISOString().split('T')[0];
-      
-      let query = supabase
-        .from('attendance')
-        .select('*')
-        .gte('date', startDateStr)
-        .lte('date', endDateStr);
-      
-      if (filters.filterRoom && filters.filterRoom !== 'all-rooms') {
-        query = query.eq('room_id', filters.filterRoom);
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) {
-        console.error('Error fetching attendance:', error);
-        return [];
-      }
-      
-      return data || [];
-    }
-  });
-
-  const { data: selectedDayAttendance, refetch: refetchDayAttendance } = useQuery({
-    queryKey: ['day-attendance', calendarState.selectedDay, calendarState.selectedMonth, calendarState.selectedYear],
-    queryFn: async () => {
-      if (!calendarState.selectedDay) return [];
-      
-      const dateString = formatDateString(calendarState.selectedDay);
-      
-      const { data, error } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('date', dateString);
-        
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: calendarState.selectedDay !== null
-  });
-
-  useEffect(() => {
-    if (monthAttendance) {
-      const newAttendanceData: Record<string, "P" | "A" | "L" | "H"> = {};
-      
-      const holidays = monthAttendance.filter(record => record.student_id === null && record.status === 'H');
-      
-      holidays.forEach(holiday => {
-        newAttendanceData[holiday.date] = 'H';
-      });
-      
-      const studentAttendance = monthAttendance.filter(record => record.student_id !== null);
-      
-      const attendanceByDate = studentAttendance.reduce((acc, record) => {
-        if (!acc[record.date]) {
-          acc[record.date] = [];
-        }
-        acc[record.date].push(record);
-        return acc;
-      }, {} as Record<string, any[]>);
-      
-      Object.entries(attendanceByDate).forEach(([date, records]) => {
-        if (newAttendanceData[date] === 'H') {
-          return;
-        }
-        
-        const statusCounts = records.reduce((acc, record) => {
-          const status = record.status;
-          if (status === 'P' || status === 'A' || status === 'L' || status === 'H') {
-            acc[status] = (acc[status] || 0) + 1;
-          }
-          return acc;
-        }, {} as Record<string, number>);
-        
-        let maxCount = 0;
-        let maxStatus: "P" | "A" | "L" | "H" = 'P';
-        
-        Object.entries(statusCounts).forEach(([status, count]) => {
-          const countValue = count as number;
-          if (countValue > maxCount) {
-            maxCount = countValue;
-            maxStatus = status as "P" | "A" | "L" | "H";
-          }
-        });
-        
-        newAttendanceData[date] = maxStatus;
-      });
-      
-      setAttendanceData(newAttendanceData);
-    }
-  }, [monthAttendance]);
+  const {
+    attendanceData,
+    handleMarkAttendance,
+    handleMarkHoliday,
+    getStudentAttendanceStatus,
+    refetchAttendance,
+    refetchDayAttendance,
+  } = useAttendanceData(
+    calendarState.selectedYear,
+    calendarState.selectedMonth,
+    calendarState.selectedDay,
+    filters.filterRoom
+  );
 
   useEffect(() => {
     const channel = supabase
@@ -205,140 +92,32 @@ const CalendarView = () => {
     calendarState.setIsStudentListOpen(true);
   };
 
-  const handleMarkAttendance = async (studentId: string, status: 'P' | 'A' | 'L' | 'H') => {
-    if (calendarState.selectedDay) {
-      const dateString = formatDateString(calendarState.selectedDay);
-      
-      try {
-        await markAttendance(studentId, status, dateString, filters.filterRoom || undefined);
-        
-        toast({
-          title: "Attendance Marked",
-          description: `Student has been marked as ${statusLabels[status]}.`,
-        });
-        
-        refetchAttendance();
-      } catch (error) {
-        console.error('Error marking attendance:', error);
-        toast({
-          title: "Error",
-          description: "Failed to mark attendance. Please try again.",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  const handleMarkHoliday = async () => {
-    if (calendarState.selectedDay) {
-      const dateString = formatDateString(calendarState.selectedDay);
-      
-      try {
-        await markDayAsHoliday(dateString);
-        
-        calendarState.setIsHolidayDialogOpen(false);
-        
-        toast({
-          title: "Holiday Marked",
-          description: `${MONTHS[calendarState.selectedMonth]} ${calendarState.selectedDay}, ${calendarState.selectedYear} has been marked as a holiday.`,
-        });
-        
-        refetchAttendance();
-      } catch (error) {
-        console.error('Error marking holiday:', error);
-        toast({
-          title: "Error",
-          description: "Failed to mark holiday. Please try again.",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  const handleMarkLeave = async () => {
-    if (calendarState.selectedDay && calendarState.selectedStudent) {
-      const dateString = formatDateString(calendarState.selectedDay);
-      
-      try {
-        await markAttendance(calendarState.selectedStudent.id, 'L', dateString);
-        
-        calendarState.setIsLeaveDialogOpen(false);
-        calendarState.setSelectedStudent(null);
-        
-        toast({
-          title: "Leave Marked",
-          description: `${calendarState.selectedStudent.name} has been marked on leave for ${MONTHS[calendarState.selectedMonth]} ${calendarState.selectedDay}, ${calendarState.selectedYear}.`,
-        });
-        
-        refetchAttendance();
-      } catch (error) {
-        console.error('Error marking leave:', error);
-        toast({
-          title: "Error",
-          description: "Failed to mark leave. Please try again.",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
   const handleStudentSelect = (student: StudentProps) => {
     calendarState.setSelectedStudent(student);
     calendarState.setIsLeaveDialogOpen(true);
     calendarState.setIsStudentListOpen(false);
   };
 
-  const getStudentAttendanceStatus = (studentId: string): "P" | "A" | "L" | "H" | "-" => {
-    if (!calendarState.selectedDay || !selectedDayAttendance) return '-';
-    
-    const dateString = formatDateString(calendarState.selectedDay);
-    const record = selectedDayAttendance.find(r => r.student_id === studentId && r.date === dateString);
-    
-    if (record) {
-      const status = record.status;
-      if (status === 'P' || status === 'A' || status === 'L' || status === 'H') {
-        return status;
-      }
-    }
-    
-    return '-';
-  };
-
   const handleStudentFilter = (studentId: string) => {
     setSelectedStudentId(studentId === 'all-students' ? null : studentId);
   };
 
+  const handleMarkLeave = async () => {
+    if (calendarState.selectedDay && calendarState.selectedStudent) {
+      await handleMarkAttendance(calendarState.selectedStudent.id, 'L');
+      calendarState.setIsLeaveDialogOpen(false);
+      calendarState.setSelectedStudent(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-        <div>
-          <h2 className="text-xl font-semibold">Attendance Records</h2>
-          <p className="text-gray-500">View and filter attendance history</p>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          <Select value={selectedStudentId || 'all-students'} onValueChange={handleStudentFilter}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select Student" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all-students">All Students</SelectItem>
-              {students?.map((student) => (
-                <SelectItem key={student.id} value={student.id}>
-                  {student.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Button 
-            variant="outline"
-            onClick={() => setIsHolidayPeriodOpen(true)}
-          >
-            Mark Holiday Period
-          </Button>
-        </div>
-      </div>
+      <CalendarHeaderTop
+        selectedStudentId={selectedStudentId}
+        onStudentFilter={handleStudentFilter}
+        onHolidayPeriodClick={() => setIsHolidayPeriodOpen(true)}
+        students={students}
+      />
 
       <CalendarHeader
         viewMode={calendarState.viewMode}
@@ -354,14 +133,7 @@ const CalendarView = () => {
         }}
       />
       
-      <div className="flex flex-wrap gap-3">
-        {Object.entries(statusLabels).map(([status, label]) => (
-          <div key={status} className="flex items-center">
-            <div className={`w-4 h-4 rounded-full ${statusColors[status as keyof typeof statusColors]} mr-2`}></div>
-            <span className="text-sm">{label}</span>
-          </div>
-        ))}
-      </div>
+      <AttendanceLegend />
       
       <CalendarGrid
         selectedMonth={calendarState.selectedMonth}
