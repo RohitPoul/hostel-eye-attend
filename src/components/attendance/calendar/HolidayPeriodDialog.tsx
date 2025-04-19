@@ -48,11 +48,15 @@ export function HolidayPeriodDialog({
       const startDateStr = values.startDate.toISOString().split('T')[0];
       const endDateStr = values.endDate.toISOString().split('T')[0];
 
-      // Call the RPC function with typed parameters
+      // Call the RPC function with explicit type casting for TypeScript
       const { error } = await supabase.rpc('mark_holiday_period', {
         p_start_date: startDateStr,
         p_end_date: endDateStr,
         p_description: values.description
+      } as {
+        p_start_date: string;
+        p_end_date: string;
+        p_description: string;
       });
 
       if (error) throw error;
